@@ -70,8 +70,8 @@ func loadPages() ([]string, string) {
 	var pages []string
 	selected := ""
 	for _, f := range files {
-		if filepath.Ext(f.Name()) == ".txt" {
-			name := f.Name()[:len(f.Name())-len(".txt")]
+		if filepath.Ext(f.Name()) == ".json" {
+			name := f.Name()[:len(f.Name())-len(".json")]
 			pages = append(pages, name)
 		}
 	}
@@ -194,16 +194,16 @@ func httpPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing name", 400)
 		return
 	}
-	path := filepath.Join(CONF.pagesDir, name+".txt")
-	content, err := ioutil.ReadFile(path)
+	path := filepath.Join(CONF.pagesDir, name+".json")
+	delta, err := ioutil.ReadFile(path)
 	if err != nil {
 		http.Error(w, "Page not found", 404)
 		return
 	}
 	resp := struct {
-		Name    string `json:"name"`
-		Content string `json:"content"`
-	}{Name: name, Content: string(content)}
+		Name  string          `json:"name"`
+		Delta json.RawMessage `json:"delta"`
+	}{Name: name, Delta: json.RawMessage(delta)}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -219,15 +219,15 @@ func httpSavePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name    string `json:"name"`
-		Content string `json:"content"`
+		Name  string          `json:"name"`
+		Delta json.RawMessage `json:"delta"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	path := filepath.Join(CONF.pagesDir, req.Name+".txt")
-	if err := ioutil.WriteFile(path, []byte(req.Content), 0644); err != nil {
+	path := filepath.Join(CONF.pagesDir, req.Name+".json")
+	if err := ioutil.WriteFile(path, []byte(req.Delta), 0644); err != nil {
 		http.Error(w, "Failed to save page", http.StatusInternalServerError)
 		return
 	}

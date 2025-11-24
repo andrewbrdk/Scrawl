@@ -118,6 +118,11 @@ class XScrawl extends HTMLElement {
     			},
                 theme: "snow"
             });
+			let saveTimer = null;
+			this.#quill.on("text-change", () => {
+				clearTimeout(saveTimer);
+				saveTimer = setTimeout(() => this.savePage(), 500);
+			});
         }
 	}
 
@@ -151,6 +156,7 @@ class XScrawl extends HTMLElement {
 
 		this.querySelectorAll("aside li").forEach(li => {
         	li.onclick = () => {
+				this.savePage();
 				const page = li.textContent;
 				this.#selected = page;
 				this.render();
@@ -169,11 +175,27 @@ class XScrawl extends HTMLElement {
 		const res = await fetch('/page?name=' + encodeURIComponent(this.#selected));
 		if (res.ok) {
 			const data = await res.json();
-			this.#quill.setText(data.content || '');
+			this.#quill.setContents(data.delta);
 		} else {
 			this.#quill.setText('');
 		}
     }
+
+	async savePage() {
+		if (!this.#selected) return;
+		const delta = this.#quill.getContents();
+		const res = await fetch('/save', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				name: this.#selected,
+				delta
+			})
+		});
+		if (!res.ok) {
+			console.error("Failed to auto-save page:", this.#selected);
+		}
+	}
 }
 
 function escapeHTML(str) {
