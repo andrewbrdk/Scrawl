@@ -1,0 +1,101 @@
+body {
+	margin: 0;
+	font-family: sans-serif;
+}
+
+h1 {
+	text-align: center;
+}
+
+h1 a {
+	color: black;
+	text-decoration: none;
+}
+
+.hidden {
+	display: none;
+}
+
+x-login[hidden], x-scrawl[hidden] {
+	/*todo: apply general .hidden style */
+	display: none;
+}
+
+x-main {
+	display: block;
+	margin: 0 auto;
+}
+
+x-login {
+	display: block;
+	text-align: center;
+
+	form {
+		display: inline-block;
+		margin-left: auto;
+		margin-right: auto;
+		text-align: center;
+	}
+	input {
+		display: inline-block;
+		box-shadow: none;
+		margin-bottom: 10px;
+		border: 1.5px solid black;
+		padding: 2px 10px;
+		border-radius: 7px;
+		font-size: 0.95rem;
+		font-weight: 400;
+	}
+	button {
+		display: inline-block;
+		background-color: white;
+		border: 1.5px solid black;
+		border-radius: 7px;
+		cursor: pointer;
+		font-size: 1rem;
+		font-weight: 400;
+		margin: 0 5px;
+		padding: 2px 10px;
+		text-align: center;
+		transition: background-color 0.1s ease;
+	}
+	button:hover {
+		box-shadow: 0 0 0px 1px black;
+	}
+	button:active {
+		background-color: #eee;
+	}
+	#invalidpassword {
+		font-weight: bold;
+		color: black;
+	}
+}
+
+x-scrawl {
+	display: flex;
+
+	aside {
+		width: 220px;
+		background: #f3f3f3;
+		padding: 12px;
+		border-right: 1px solid #ddd;
+		
+		ul {
+			list-style: none;
+			padding: 0;
+		}
+		li {
+			padding: 8px 10px;
+			margin-bottom: 4px;
+			cursor: pointer;
+			border-radius: 4px;
+		}
+		li:hover {
+			background: #e2e2e2;
+		}
+		li.selected {
+			background: #4285f4;
+			color: white;
+		}
+	}
+}

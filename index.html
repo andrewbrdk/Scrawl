@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>Scrawl</title>
+	<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+	
+<x-main></x-main>
+
+<script>
+class XMain extends HTMLElement {
+	#login = null;
+	#scrawl = null;
+	
+	constructor() {
+		super();
+		this.innerHTML = `
+			<x-login></x-login>
+			<x-scrawl></x-scrawl>
+		`;
+		this.#scrawl = this.querySelector('x-scrawl');
+		this.#login = this.querySelector('x-login');
+		this.#login.hidden = true;
+		this.#scrawl.hidden = true;
+		this.addEventListener('loginsuccess', (e) => {
+			this.renderPage();
+		});
+		this.renderPage();
+	}
+
+	async renderPage() {
+		let res = await fetch('/pages');
+		const statusCode = res.status;
+		if (statusCode == 200) {
+			this.#scrawl.hidden = false;
+			this.#login.hidden = true;
+			let p = await res.json();
+			this.#scrawl.init(p);
+		} else if (statusCode == 401) { // unauthorized
+			this.#login.hidden = false;
+			this.#scrawl.hidden = true;
+		} else {
+			this.#scrawl.hidden = true;
+		}
+	}
+}
+
+class XLogin extends HTMLElement {
+	constructor() {
+		super();
+		this.innerHTML = `
+			<h1>Scrawl</h1>
+			<form>
+				<label for="password">Password:</label>
+				<input type="password" id="password" name="password" required>
+				<button type="button">Login</button>
+				<br/>
+				<div id="invalidpassword" style="display: none;">Invalid Password</div>
+			</form>
+		`;
+		this.querySelector('form').onsubmit = (e) => {
+			e.preventDefault();
+			this.submitLogin();
+		};
+		this.querySelector('button').onclick = (e) => {
+			e.preventDefault();
+			this.submitLogin();
+		};
+	}
+
+	async submitLogin() {
+		const password = this.querySelector('#password').value;
+		const response = await fetch('/login', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			credentials: 'include',
+			body: JSON.stringify({ password }),
+		});
+		if (response.ok) {
+			this.querySelector('#invalidpassword').style.display = "none";
+			this.dispatchEvent(new CustomEvent('loginsuccess', { bubbles: true }));
+		} else {
+			this.querySelector('#invalidpassword').style.display = "inline";
+			setTimeout(() => {this.querySelector('#invalidpassword').style.display = "none";}, 3000);
+		}
+	}
+}
+
+class XScrawl extends HTMLElement {
+	#aside = null;
+	#ul = null;
+	#editor = null;
+	#pages = null;
+	#selected = null;
+
+	getDisplayedState() {
+		return {};
+	}
+
+	constructor() {
+		super();
+		this.innerHTML = `
+			<aside><ul></ul></aside>
+			<div id="editor"></div>`;
+		this.#aside = this.querySelector('aside');
+		this.#ul = this.querySelector('ul');
+		this.#editor = this.querySelector('#editor');
+	}
+
+	async init(p) {
+		this.#pages = p.pages;
+		this.#selected = p.selected;
+		await this.render();
+	}
+
+	async render() {
+		this.updatePages();
+		this.bindEvents();
+	}
+
+	async updatePages() {
+		this.#ul.innerHTML = "";
+		//todo: replace
+		this.#pages.forEach(page => {
+			const li = document.createElement("li");
+			li.textContent = page;
+			if (page === this.#selected) {
+				li.classList.add("selected");
+			}
+			this.#ul.appendChild(li);
+		});
+		this.#editor.textContent = this.#selected;
+	}
+
+	bindEvents() {
+		this.unbindEvents();
+	}
+	
+	unbindEvents() {
+		this.onclick = null;
+		this.querySelectorAll('button').forEach(btn => btn.onclick = null);
+	}
+
+}
+
+function escapeHTML(str) {
+	const div = document.createElement('div');
+	div.textContent = str;
+	return div.innerHTML;
+}
+
+customElements.define('x-main', XMain);
+customElements.define('x-login', XLogin);
+customElements.define('x-scrawl', XScrawl);
+
+</script>
+</body>
+</html>
