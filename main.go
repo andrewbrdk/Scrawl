@@ -4,9 +4,11 @@ import (
 	"crypto/rand"
 	"embed"
 	"encoding/json"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -59,6 +61,22 @@ func generateRandomKey(size int) []byte {
 	return key
 }
 
+func loadPages() ([]string, string) {
+	files, _ := ioutil.ReadDir(CONF.pagesDir)
+	var pages []string
+	selected := ""
+	for _, f := range files {
+		if filepath.Ext(f.Name()) == ".txt" {
+			name := f.Name()[:len(f.Name())-len(".txt")]
+			pages = append(pages, name)
+		}
+	}
+	if len(pages) > 0 {
+		selected = pages[0]
+	}
+	return pages, selected
+}
+
 type Response struct {
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
@@ -69,6 +87,8 @@ func httpServer() {
 	http.Handle("/style.css", http.FileServer(http.FS(embedded)))
 	http.HandleFunc("/login", httpLogin)
 	http.HandleFunc("/pages", httpPages)
+	http.HandleFunc("/page", httpPage)
+	http.HandleFunc("/save", httpSavePage)
 	log.Fatal(http.ListenAndServe(CONF.port, nil))
 }
 
@@ -147,19 +167,66 @@ func httpPages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, code)
 		return
 	}
-	type Response struct {
+	pages, selected := loadPages()
+	resp := struct {
 		Pages    []string `json:"pages"`
 		Selected string   `json:"selected"`
-	}
-	resp := Response{
-		Pages:    []string{"Home", "About", "Contact"},
-		Selected: "Home",
+	}{
+		Pages:    pages,
+		Selected: selected,
 	}
 	w.Header().Set("Content-Type", "application/json")
-	enc := json.NewEncoder(w)
-	//enc.SetEscapeHTML(false)
-	if err := enc.Encode(resp); err != nil {
-		http.Error(w, "failed to encode json", http.StatusInternalServerError)
+	json.NewEncoder(w).Encode(resp)
+}
+
+func httpPage(w http.ResponseWriter, r *http.Request) {
+	err, code, msg := httpCheckAuth(w, r)
+	if err != nil {
+		http.Error(w, msg, code)
 		return
 	}
+	name := r.URL.Query().Get("name")
+	if name == "" {
+		http.Error(w, "Missing name", 400)
+		return
+	}
+	path := filepath.Join(CONF.pagesDir, name+".txt")
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		http.Error(w, "Page not found", 404)
+		return
+	}
+	resp := struct {
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	}{Name: name, Content: string(content)}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func httpSavePage(w http.ResponseWriter, r *http.Request) {
+	err, code, msg := httpCheckAuth(w, r)
+	if err != nil {
+		http.Error(w, msg, code)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		Name    string `json:"name"`
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	path := filepath.Join(CONF.pagesDir, req.Name+".txt")
+	if err := ioutil.WriteFile(path, []byte(req.Content), 0644); err != nil {
+		http.Error(w, "Failed to save page", http.StatusInternalServerError)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("ok"))
 }

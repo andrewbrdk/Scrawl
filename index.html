@@ -95,9 +95,9 @@ class XScrawl extends HTMLElement {
 	#aside = null;
 	#ul = null;
 	#editor = null;
+	#quill = null;
 	#pages = null;
 	#selected = null;
-	#quill = null;
 
 	getDisplayedState() {
 		return {};
@@ -135,7 +135,7 @@ class XScrawl extends HTMLElement {
 
 	async updatePages() {
 		this.#ul.innerHTML = "";
-		//todo: replace
+		if (!this.#pages) return;
 		this.#pages.forEach(page => {
 			const li = document.createElement("li");
 			li.textContent = page;
@@ -151,7 +151,7 @@ class XScrawl extends HTMLElement {
 
 		this.querySelectorAll("aside li").forEach(li => {
         	li.onclick = () => {
-				const page = li.dataset.page;
+				const page = li.textContent;
 				this.#selected = page;
 				this.render();
 			};
@@ -164,8 +164,15 @@ class XScrawl extends HTMLElement {
 		this.querySelectorAll("aside li").forEach(li => li.onclick = null);
 	}
 
-	updateEditor() {
-        this.#quill.setText(this.#selected);
+	async updateEditor() {
+        if (!this.#selected) return;
+		const res = await fetch('/page?name=' + encodeURIComponent(this.#selected));
+		if (res.ok) {
+			const data = await res.json();
+			this.#quill.setText(data.content || '');
+		} else {
+			this.#quill.setText('');
+		}
     }
 }
 
