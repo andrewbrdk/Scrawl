@@ -94,6 +94,7 @@ func httpServer() {
 	http.HandleFunc("/page", httpPage)
 	http.HandleFunc("/save", httpSavePage)
 	http.HandleFunc("/create", httpCreatePage)
+	http.HandleFunc("/delete", httpDeletePage)
 	log.Fatal(http.ListenAndServe(CONF.port, nil))
 }
 
@@ -276,6 +277,47 @@ func httpCreatePage(w http.ResponseWriter, r *http.Request) {
 	}{
 		Pages: pages,
 	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func httpDeletePage(w http.ResponseWriter, r *http.Request) {
+	err, code, msg := httpCheckAuth(w, r)
+	if err != nil {
+		http.Error(w, msg, code)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", 400)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "Missing page name", 400)
+		return
+	}
+
+	filename := filepath.Join(CONF.pagesDir, req.Name+".json")
+	if err := os.Remove(filename); err != nil {
+		http.Error(w, "Failed to delete page", 500)
+		return
+	}
+
+	pages, selected := loadPages()
+	resp := struct {
+		Pages    []string `json:"pages"`
+		Selected string   `json:"selected"`
+	}{
+		Pages:    pages,
+		Selected: selected,
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }

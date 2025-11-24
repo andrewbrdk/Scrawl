@@ -84,6 +84,8 @@ x-scrawl {
 		background: #f3f3f3;
 		padding: 12px;
 		border-right: 1px solid black;
+    	justify-content: space-between;
+    	align-items: center;
 		
 		ul {
 			list-style: none;
@@ -101,6 +103,15 @@ x-scrawl {
 		li.selected {
 			background: #4285f4;
 			color: white;
+		}
+		button.delete {
+			border: none;
+			background: transparent;
+			cursor: pointer;
+			font-weight: bold;
+		}
+		button.delete:hover {
+			color: red;
 		}
 	}
 	#editor {

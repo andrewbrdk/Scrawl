@@ -146,7 +146,10 @@ class XScrawl extends HTMLElement {
 		if (!this.#pages) return;
 		this.#pages.forEach(page => {
 			const li = document.createElement("li");
-			li.textContent = page;
+			li.innerHTML = `
+				<span class="title">${page}</span>
+				<button class="delete">✕</button>
+			`;
 			if (page === this.#selected) {
 				li.classList.add("selected");
 			}
@@ -166,9 +169,13 @@ class XScrawl extends HTMLElement {
 		this.querySelectorAll("aside li").forEach(li => {
         	li.onclick = () => {
 				this.savePage();
-				const page = li.textContent;
+				const page = li.querySelector(".title").textContent;
 				this.#selected = page;
 				this.render();
+			};
+			li.querySelector(".delete").onclick = (e) => {
+				e.stopPropagation();
+				this.deletePage(li.querySelector(".title").textContent);
 			};
 		});
 	}
@@ -219,6 +226,23 @@ class XScrawl extends HTMLElement {
 		const data = await res.json();
 		this.#pages = data.pages;
 		this.#selected = name;
+		await this.render();
+	}
+
+	async deletePage(name) {
+		if (!confirm(`Delete page "${name}"?`)) return;
+		const res = await fetch('/delete', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name }),
+		});
+		if (!res.ok) {
+			console.error("Failed to delete page");
+			return;
+		}
+		const data = await res.json();
+		this.#pages = data.pages;
+		this.#selected = data.selected;
 		await this.render();
 	}
 }
