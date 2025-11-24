@@ -62,7 +62,11 @@ func generateRandomKey(size int) []byte {
 }
 
 func loadPages() ([]string, string) {
-	files, _ := ioutil.ReadDir(CONF.pagesDir)
+	files, err := ioutil.ReadDir(CONF.pagesDir)
+	if err != nil {
+		errorLog.Printf("Pages directory missing: %s", CONF.pagesDir)
+		return nil, ""
+	}
 	var pages []string
 	selected := ""
 	for _, f := range files {
