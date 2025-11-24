@@ -94,6 +94,7 @@ class XLogin extends HTMLElement {
 class XScrawl extends HTMLElement {
 	#aside = null;
 	#ul = null;
+	#pagetitle = null;
 	#editor = null;
 	#quill = null;
 	#pages = null;
@@ -110,9 +111,13 @@ class XScrawl extends HTMLElement {
 				<ul></ul>
 				<button id="newpage">Add Page</button>
 			</aside>
-			<div id="editor"></div>`;
+			<div id="content">
+				<h2 id="pagetitle"></h2>
+				<div id="editor"></div>
+			</div>`;
 		this.#aside = this.querySelector('aside');
 		this.#ul = this.querySelector('ul');
+		this.#pagetitle = this.querySelector('#pagetitle');
 		this.#editor = this.querySelector('#editor');
 		if (!this.#quill) {
             this.#quill = new Quill(this.#editor, {
@@ -121,6 +126,7 @@ class XScrawl extends HTMLElement {
     			},
                 theme: "snow"
             });
+			//todo: move to bindEvents()
 			let saveTimer = null;
 			this.#quill.on("text-change", () => {
 				clearTimeout(saveTimer);
@@ -138,6 +144,7 @@ class XScrawl extends HTMLElement {
 	async render() {
 		this.updatePages();
 		this.bindEvents();
+		this.updateTitle();
 		this.updateEditor();
 	}
 
@@ -184,6 +191,10 @@ class XScrawl extends HTMLElement {
 		this.onclick = null;
 		this.querySelectorAll('button').forEach(btn => btn.onclick = null);
 		this.querySelectorAll("aside li").forEach(li => li.onclick = null);
+	}
+
+	updateTitle() {
+    	this.#pagetitle.textContent = this.#selected || "";
 	}
 
 	async updateEditor() {
