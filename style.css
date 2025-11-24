@@ -1,5 +1,7 @@
-body {
+html, body {
+	height: 100%;
 	margin: 0;
+    padding: 0;
 	font-family: sans-serif;
 }
 
@@ -24,6 +26,7 @@ x-login[hidden], x-scrawl[hidden] {
 x-main {
 	display: block;
 	margin: 0 auto;
+	height: 100%;
 }
 
 x-login {
@@ -73,12 +76,14 @@ x-login {
 
 x-scrawl {
 	display: flex;
+	height: 100%;
 
 	aside {
-		width: 220px;
+		width: 15%;
+		height: 100%;
 		background: #f3f3f3;
 		padding: 12px;
-		border-right: 1px solid #ddd;
+		border-right: 1px solid black;
 		
 		ul {
 			list-style: none;
