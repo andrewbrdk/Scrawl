@@ -5,6 +5,8 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>Scrawl</title>
 	<link rel="stylesheet" href="/style.css">
+	<link href="https://cdn.quilljs.com/1.3.7/quill.snow.css" rel="stylesheet">
+	<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 </head>
 <body>
 	
@@ -95,6 +97,7 @@ class XScrawl extends HTMLElement {
 	#editor = null;
 	#pages = null;
 	#selected = null;
+	#quill = null;
 
 	getDisplayedState() {
 		return {};
@@ -108,6 +111,14 @@ class XScrawl extends HTMLElement {
 		this.#aside = this.querySelector('aside');
 		this.#ul = this.querySelector('ul');
 		this.#editor = this.querySelector('#editor');
+		if (!this.#quill) {
+            this.#quill = new Quill(this.#editor, {
+				modules: {
+        			toolbar: false
+    			},
+                theme: "snow"
+            });
+        }
 	}
 
 	async init(p) {
@@ -119,6 +130,7 @@ class XScrawl extends HTMLElement {
 	async render() {
 		this.updatePages();
 		this.bindEvents();
+		this.updateEditor();
 	}
 
 	async updatePages() {
@@ -132,18 +144,29 @@ class XScrawl extends HTMLElement {
 			}
 			this.#ul.appendChild(li);
 		});
-		this.#editor.textContent = this.#selected;
 	}
 
 	bindEvents() {
 		this.unbindEvents();
+
+		this.querySelectorAll("aside li").forEach(li => {
+        	li.onclick = () => {
+				const page = li.dataset.page;
+				this.#selected = page;
+				this.render();
+			};
+		});
 	}
 	
 	unbindEvents() {
 		this.onclick = null;
 		this.querySelectorAll('button').forEach(btn => btn.onclick = null);
+		this.querySelectorAll("aside li").forEach(li => li.onclick = null);
 	}
 
+	updateEditor() {
+        this.#quill.setText(this.#selected);
+    }
 }
 
 function escapeHTML(str) {

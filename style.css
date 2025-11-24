@@ -103,4 +103,7 @@ x-scrawl {
 			color: white;
 		}
 	}
+	#editor {
+		flex: 1;
+	}
 }
