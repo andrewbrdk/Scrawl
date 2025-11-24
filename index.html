@@ -106,7 +106,10 @@ class XScrawl extends HTMLElement {
 	constructor() {
 		super();
 		this.innerHTML = `
-			<aside><ul></ul></aside>
+			<aside>
+				<ul></ul>
+				<button id="newpage">Add Page</button>
+			</aside>
 			<div id="editor"></div>`;
 		this.#aside = this.querySelector('aside');
 		this.#ul = this.querySelector('ul');
@@ -154,6 +157,12 @@ class XScrawl extends HTMLElement {
 	bindEvents() {
 		this.unbindEvents();
 
+		this.querySelector("#newpage").onclick = () => {
+			const name = prompt("Enter page name:");
+			if (!name) return;
+			this.createPage(name);
+		};
+
 		this.querySelectorAll("aside li").forEach(li => {
         	li.onclick = () => {
 				this.savePage();
@@ -195,6 +204,22 @@ class XScrawl extends HTMLElement {
 		if (!res.ok) {
 			console.error("Failed to auto-save page:", this.#selected);
 		}
+	}
+
+	async createPage(name) {
+		const res = await fetch('/create', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name })
+		});
+		if (!res.ok) {
+			console.error("Failed to create page");
+			return;
+		}
+		const data = await res.json();
+		this.#pages = data.pages;
+		this.#selected = name;
+		await this.render();
 	}
 }
 

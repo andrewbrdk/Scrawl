@@ -93,6 +93,7 @@ func httpServer() {
 	http.HandleFunc("/pages", httpPages)
 	http.HandleFunc("/page", httpPage)
 	http.HandleFunc("/save", httpSavePage)
+	http.HandleFunc("/create", httpCreatePage)
 	log.Fatal(http.ListenAndServe(CONF.port, nil))
 }
 
@@ -233,4 +234,48 @@ func httpSavePage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("ok"))
+}
+
+func httpCreatePage(w http.ResponseWriter, r *http.Request) {
+	err, code, msg := httpCheckAuth(w, r)
+	if err != nil {
+		http.Error(w, msg, code)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", 405)
+		return
+	}
+	var req struct {
+		Name string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", 400)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "Missing page name", 400)
+		return
+	}
+
+	filename := filepath.Join(CONF.pagesDir, req.Name+".json")
+	if _, err := os.Stat(filename); err == nil {
+		http.Error(w, "Page already exists", 409)
+		return
+	}
+
+	empty := []byte(`{"ops":[{"insert":"\n"}]}`)
+	if err := os.WriteFile(filename, empty, 0644); err != nil {
+		http.Error(w, "Failed to write page", 500)
+		return
+	}
+
+	pages, _ := loadPages()
+	resp := struct {
+		Pages []string `json:"pages"`
+	}{
+		Pages: pages,
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
