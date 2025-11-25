@@ -112,7 +112,7 @@ class XScrawl extends HTMLElement {
 				<button id="newpage">Add Page</button>
 			</aside>
 			<div id="content">
-				<h2 id="pagetitle"></h2>
+				<input id="pagetitle" type="text">
 				<div id="editor"></div>
 			</div>`;
 		this.#aside = this.querySelector('aside');
@@ -185,6 +185,12 @@ class XScrawl extends HTMLElement {
 				this.deletePage(li.querySelector(".title").textContent);
 			};
 		});
+
+		let renameTimer = null;
+		this.#pagetitle.oninput = () => {
+			clearTimeout(renameTimer);
+			renameTimer = setTimeout(() => {this.saveTitleChange();}, 400);
+		};
 	}
 	
 	unbindEvents() {
@@ -194,7 +200,7 @@ class XScrawl extends HTMLElement {
 	}
 
 	updateTitle() {
-    	this.#pagetitle.textContent = this.#selected || "";
+		this.#pagetitle.value = this.#selected ?? "";
 	}
 
 	async updateEditor() {
@@ -256,6 +262,36 @@ class XScrawl extends HTMLElement {
 		this.#selected = data.selected;
 		await this.render();
 	}
+
+	async saveTitleChange() {
+		const newName = this.#pagetitle.value.trim();
+		const oldName = this.#selected;
+		if (!newName || newName === oldName) return;
+		const ok = await this.renamePage(oldName, newName);
+		if (!ok) {
+			console.error("Rename failed");
+			this.#pagetitle.value = oldName;
+			return;
+		}
+		const idx = this.#pages.indexOf(oldName);
+		if (idx !== -1) {
+			this.#pages[idx] = newName;
+		}
+		this.#selected = newName;
+		this.render();
+	}
+
+	async renamePage(oldName, newName) {
+		const res = await fetch('/rename', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ oldName, newName })
+		});
+		if (!res.ok) return false;
+		const data = await res.json();
+		return data.ok === true;
+	}
+
 }
 
 function escapeHTML(str) {

@@ -101,8 +101,7 @@ x-scrawl {
 			background: #e2e2e2;
 		}
 		li.selected {
-			background: #4285f4;
-			color: white;
+			font-weight: bold;
 		}
 		button.delete {
 			border: none;
@@ -120,9 +119,21 @@ x-scrawl {
 		flex-direction: column;
 	}
 	#pagetitle {
-		margin: 0;
-		padding: 12px;
-		font-size: 1.4rem;
+		font-size: 1.6rem;
+		font-weight: bold;
+		border: none;
+		outline: none;
+		width: 100%;
+		background: transparent;
+		padding: 0;
+		margin-left: 1rem;
+		margin-top: 0.5rem;
+		font-family: inherit;
+		cursor: text; 
+	}
+	#pagetitle:focus {
+		border-bottom: 1px solid #ccc;
+		cursor: text;
 	}
 	#editor {
 		flex: 1;

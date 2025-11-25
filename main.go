@@ -95,6 +95,7 @@ func httpServer() {
 	http.HandleFunc("/save", httpSavePage)
 	http.HandleFunc("/create", httpCreatePage)
 	http.HandleFunc("/delete", httpDeletePage)
+	http.HandleFunc("/rename", httpRenamePage)
 	log.Fatal(http.ListenAndServe(CONF.port, nil))
 }
 
@@ -318,6 +319,43 @@ func httpDeletePage(w http.ResponseWriter, r *http.Request) {
 		Selected: selected,
 	}
 
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
+}
+
+func httpRenamePage(w http.ResponseWriter, r *http.Request) {
+	err, code, msg := httpCheckAuth(w, r)
+	if err != nil {
+		http.Error(w, msg, code)
+		return
+	}
+	var req struct {
+		OldName string `json:"oldName"`
+		NewName string `json:"newName"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.OldName == "" || req.NewName == "" {
+		http.Error(w, "Missing name", http.StatusBadRequest)
+		return
+	}
+	oldPath := filepath.Join(CONF.pagesDir, req.OldName+".json")
+	newPath := filepath.Join(CONF.pagesDir, req.NewName+".json")
+	if _, statErr := os.Stat(CONF.pagesDir); statErr != nil {
+		http.Error(w, "Pages directory missing", http.StatusInternalServerError)
+		return
+	}
+	if err := os.Rename(oldPath, newPath); err != nil {
+		http.Error(w, "Rename failed", http.StatusInternalServerError)
+		return
+	}
+	resp := struct {
+		Ok bool `json:"ok"`
+	}{
+		Ok: true,
+	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
