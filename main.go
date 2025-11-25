@@ -62,6 +62,14 @@ func generateRandomKey(size int) []byte {
 }
 
 func loadPages() ([]string, string) {
+	if _, err := os.Stat(CONF.pagesDir); err != nil {
+		infoLog.Printf("Pages directory '%s' missing. Creating.", CONF.pagesDir)
+		if mkErr := os.MkdirAll(CONF.pagesDir, 0755); mkErr != nil {
+			errorLog.Printf("Failed to create pages directory: %s", CONF.pagesDir)
+			return nil, ""
+		}
+		infoLog.Printf("Created pages directory: %s", CONF.pagesDir)
+	}
 	files, err := ioutil.ReadDir(CONF.pagesDir)
 	if err != nil {
 		errorLog.Printf("Pages directory missing: %s", CONF.pagesDir)
