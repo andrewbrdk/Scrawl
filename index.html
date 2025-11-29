@@ -150,36 +150,47 @@ class XScrawl extends HTMLElement {
 	async updatePages() {
 		this.#ul.innerHTML = "";
 		if (!this.#notebook) return;
-		//todo: simplify
-		const createPageList = (pages) => {
-			const ul = document.createElement("ul");
+		const addPageList = (pages, depth=0) => {
 			pages.forEach(page => {
 				const li = document.createElement("li");
 				li.dataset.id = page.id;
+				li.dataset.depth = depth;
+
+				const isSelected = (page.id === this.#selected ? "selected" : "");
+				const hasChildren = page.children && page.children.length > 0;
+				const toggleSymbol = "";
+
 				li.innerHTML = `
-					<span class="title">${escapeHTML(page.title)}</span>
-					<button class="delete">✕</button>
+					<div class="page-row ${isSelected}" data-depth="${depth}">
+						<div class="left">
+							<button class="toggle">${toggleSymbol}</button>
+							<span class="title">${escapeHTML(page.title)}</span>
+						</div>
+						<div class="right">
+							<button class="addchild">＋</button>
+							<button class="delete">✕</button>
+						</div>
+					</div>
 				`;
-				if (page.id === this.#selected) li.classList.add("selected");
-				if (page.children && page.children.length > 0) {
-					const childUl = createPageList(page.children);
-					li.appendChild(childUl);
+				const wrapper = li.firstElementChild;
+        		wrapper.style.setProperty('--depth', String(depth));
+
+				this.#ul.appendChild(li);
+				if (hasChildren) {
+					addPageList(page.children, depth+1);
 				}
-				ul.appendChild(li);
 			});
-			return ul;
 		};
-		const nestedUl = createPageList(this.#notebook.pages);
-		this.#ul.appendChild(nestedUl);
+		addPageList(this.#notebook.pages, 0);
 	}
 
 	bindEvents() {
 		this.unbindEvents();
 
 		this.querySelector("#newpage").onclick = () => {
-			const name = prompt("Enter page name:");
-			if (!name) return;
-			this.createPage(name);
+			const title = prompt("Enter page title:");
+			if (!title) return;
+			this.createPage(title);
 		};
 
 		this.querySelectorAll("aside li").forEach(li => {
@@ -191,6 +202,12 @@ class XScrawl extends HTMLElement {
 			li.querySelector(".delete").onclick = async (e) => {
 				e.stopPropagation();
 				await this.deletePage(li.dataset.id);
+			};
+			li.querySelector(".addchild").onclick = (e) => {
+				const title = prompt("Enter page title:");
+				if (!title) return;
+				e.stopPropagation();
+				this.createPage(title, li.dataset.id);
 			};
 		});
 
@@ -211,9 +228,10 @@ class XScrawl extends HTMLElement {
 		this.#pagetitle.value = this.getPageTitleById(this.#selected) ?? "";
 	}
 
-	getPageTitleById(id) {
+	getPageTitleById(id, pages=null) {
 		if (!id) return null;
-		for (const page of this.#notebook.pages) {
+		if (pages === null) pages = this.#notebook.pages;
+		for (const page of pages) {
 			if (page.id === id) return page.title;
 			if (page.children && page.children.length > 0) {
 				const title = this.getPageTitleById(id, page.children);
@@ -247,11 +265,11 @@ class XScrawl extends HTMLElement {
 		}
 	}
 
-	async createPage(title) {
+	async createPage(title, parentId) {
 		const res = await fetch('/create', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ title: title, parent: "" })
+			body: JSON.stringify({ title: title, parent: parentId || "" })
 		});
 		if (!res.ok) {
 			console.error("Failed to create page");

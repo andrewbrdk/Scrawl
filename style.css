@@ -97,10 +97,34 @@ x-scrawl {
 			cursor: pointer;
 			border-radius: 4px;
 		}
+		.page-row {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 2px 4px;
+
+			padding-left: calc(var(--depth) * 1rem);
+		}
+		.page-row .left {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+		}
+		.page-row .right {
+			display: flex;
+			align-items: center;
+			gap: 4px;
+		}
 		li:hover {
 			background: #e2e2e2;
 		}
-		li.selected {
+		.page-row.selected {
+			font-weight: bold;
+		}
+		button.addchild {
+			border: none;
+			background: transparent;
+			cursor: pointer;
 			font-weight: bold;
 		}
 		button.delete {
@@ -112,6 +136,7 @@ x-scrawl {
 		button.delete:hover {
 			color: red;
 		}
+
 	}
 	#content {
 		flex: 1;
