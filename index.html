@@ -99,10 +99,7 @@ class XScrawl extends HTMLElement {
 	#quill = null;
 	#notebook = null;
 	#selected = null;
-
-	getDisplayedState() {
-		return {};
-	}
+	#expanded = {};
 
 	constructor() {
 		super();
@@ -137,6 +134,8 @@ class XScrawl extends HTMLElement {
 
 	async init(p) {
 		this.#notebook = p;
+		//todo: this.#selected = last_open
+		this.#selected = p.pages.length > 0 ? p.pages[0].id : null;
 		await this.render();
 	}
 
@@ -158,13 +157,16 @@ class XScrawl extends HTMLElement {
 
 				const isSelected = (page.id === this.#selected ? "selected" : "");
 				const hasChildren = page.children && page.children.length > 0;
-				const collapseSymbol = ">";
+				//todo: simplify
+				const collapseSymbol = "›";
 				const collapseHidden = hasChildren ? "" : "hide"; //todo: rename
+				const expanded = this.#expanded?.[page.id];
+				const collapseClass = expanded ? "expanded" : "";
 
 				li.innerHTML = `
 					<div class="page-row ${isSelected}" data-depth="${depth}">
 						<div class="left">
-							<button class="collapse ${collapseHidden}">${collapseSymbol}</button>
+							<button class="collapse ${collapseHidden} ${collapseClass}">${collapseSymbol}</button>
 							<span class="title">${escapeHTML(page.title)}</span>
 						</div>
 						<div class="right">
@@ -177,7 +179,7 @@ class XScrawl extends HTMLElement {
         		wrapper.style.setProperty('--depth', String(depth));
 
 				this.#ul.appendChild(li);
-				if (hasChildren) {
+				if (hasChildren && expanded) {
 					addPageList(page.children, depth+1);
 				}
 			});
@@ -209,6 +211,17 @@ class XScrawl extends HTMLElement {
 				if (!title) return;
 				e.stopPropagation();
 				this.createPage(title, li.dataset.id);
+			};
+			li.querySelector(".collapse").onclick = (e) => {
+				e.stopPropagation();
+				const id = li.dataset.id;
+				if (id in this.#expanded) {
+					delete this.#expanded[id];
+				} else {
+					this.#expanded[id] = true;
+				}
+				this.#selected = id;
+				this.render();
 			};
 		});
 
