@@ -158,12 +158,13 @@ class XScrawl extends HTMLElement {
 
 				const isSelected = (page.id === this.#selected ? "selected" : "");
 				const hasChildren = page.children && page.children.length > 0;
-				const toggleSymbol = "";
+				const collapseSymbol = ">";
+				const collapseHidden = hasChildren ? "" : "hide"; //todo: rename
 
 				li.innerHTML = `
 					<div class="page-row ${isSelected}" data-depth="${depth}">
 						<div class="left">
-							<button class="toggle">${toggleSymbol}</button>
+							<button class="collapse ${collapseHidden}">${collapseSymbol}</button>
 							<span class="title">${escapeHTML(page.title)}</span>
 						</div>
 						<div class="right">

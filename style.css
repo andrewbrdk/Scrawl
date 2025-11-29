@@ -102,7 +102,6 @@ x-scrawl {
 			justify-content: space-between;
 			align-items: center;
 			padding: 2px 4px;
-
 			padding-left: calc(var(--depth) * 1rem);
 		}
 		.page-row .left {
@@ -113,13 +112,24 @@ x-scrawl {
 		.page-row .right {
 			display: flex;
 			align-items: center;
-			gap: 4px;
+			gap: 1rem;
 		}
 		li:hover {
 			background: #e2e2e2;
 		}
 		.page-row.selected {
 			font-weight: bold;
+		}
+		button.collapse {
+			border: none;
+			background: transparent;
+			cursor: pointer;
+			font-weight: bold;
+			width: 0.8rem;
+    		min-width: 0.8rem;
+		}
+		button.collapse.hide { /*todo: rename*/
+			visibility: hidden;
 		}
 		button.addchild {
 			border: none;
