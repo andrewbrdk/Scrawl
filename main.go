@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"embed"
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -30,11 +31,26 @@ type Config struct {
 	password string
 }
 
+type Notebook struct {
+	Name  string     `json:"name"`
+	Pages []PageNode `json:"pages"`
+	//todo: []*Page
+}
+
+type PageNode struct {
+	ID       string     `json:"id"`
+	Title    string     `json:"title"`
+	File     string     `json:"file"` //todo: save, don't export
+	Children []PageNode `json:"children"`
+	//todo: []*Page
+}
+
 func main() {
 	initConfig()
 	jwtSecretKey = generateRandomKey(32)
 	infoLog = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLog = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
+	//todo: load notebooks, store in memory
 	httpServer()
 }
 
@@ -61,32 +77,171 @@ func generateRandomKey(size int) []byte {
 	return key
 }
 
-func loadPages() ([]string, string) {
+func loadNotebook() Notebook {
 	if _, err := os.Stat(CONF.pagesDir); err != nil {
 		infoLog.Printf("Pages directory '%s' missing. Creating.", CONF.pagesDir)
 		if mkErr := os.MkdirAll(CONF.pagesDir, 0755); mkErr != nil {
 			errorLog.Printf("Failed to create pages directory: %s", CONF.pagesDir)
-			return nil, ""
+			panic("Failed to create pages directory")
 		}
 		infoLog.Printf("Created pages directory: %s", CONF.pagesDir)
 	}
-	files, err := ioutil.ReadDir(CONF.pagesDir)
+
+	structurePath := filepath.Join(CONF.pagesDir, "structure.json")
+	data, err := os.ReadFile(structurePath)
 	if err != nil {
-		errorLog.Printf("Pages directory missing: %s", CONF.pagesDir)
-		return nil, ""
+		infoLog.Printf("Creating new empty notebook")
+		nb := Notebook{
+			Name:  "Notebook",
+			Pages: []PageNode{},
+		}
+		saveNotebook(nb)
+		return nb
 	}
-	var pages []string
-	selected := ""
-	for _, f := range files {
-		if filepath.Ext(f.Name()) == ".json" {
-			name := f.Name()[:len(f.Name())-len(".json")]
-			pages = append(pages, name)
+
+	var nb Notebook
+	json.Unmarshal(data, &nb)
+	return nb
+}
+
+func saveNotebook(nb Notebook) {
+	structurePath := filepath.Join(CONF.pagesDir, "structure.json")
+	b, _ := json.MarshalIndent(nb, "", "  ")
+	os.WriteFile(structurePath, b, 0644)
+}
+
+func generateID() string {
+	//todo: use other method; check overlap with existing
+	b := make([]byte, 8)
+	rand.Read(b)
+	return fmt.Sprintf("%x", b)
+}
+
+func (nb *Notebook) FindPage(id string) *PageNode {
+	for i := range nb.Pages {
+		p := nb.Pages[i].FindPage(id)
+		if p != nil {
+			return p
 		}
 	}
-	if len(pages) > 0 {
-		selected = pages[0]
+	return nil
+}
+
+func (p *PageNode) FindPage(id string) *PageNode {
+	if p.ID == id {
+		return p
 	}
-	return pages, selected
+	for i := range p.Children {
+		child := p.Children[i].FindPage(id)
+		if child != nil {
+			return child
+		}
+	}
+	return nil
+}
+
+func (p *PageNode) ReadPage() json.RawMessage {
+	path := filepath.Join(CONF.pagesDir, p.File)
+	infoLog.Printf("Reading %s", path)
+	delta, err := ioutil.ReadFile(path)
+	if err != nil {
+		errorLog.Printf("Can't read page '%s' (id='%s'): %s", p.Title, p.ID, err)
+		return nil
+	}
+	return delta
+}
+
+func (nb *Notebook) InsertPage(parentID string, node PageNode) error {
+	if parentID == "" {
+		nb.Pages = append(nb.Pages, node)
+		return nil
+	}
+	parent := nb.FindPage(parentID)
+	if parent == nil {
+		return fmt.Errorf("parent not found: %s", parentID)
+	}
+	parent.Children = append(parent.Children, node)
+	return nil
+}
+
+func (nb *Notebook) CreatePage(title string) *PageNode {
+	id := generateID()
+	node := PageNode{
+		ID:       id,
+		Title:    title,
+		File:     id + ".json",
+		Children: []PageNode{},
+	}
+	filename := filepath.Join(CONF.pagesDir, node.File)
+	if _, err := os.Stat(filename); err == nil {
+		errorLog.Printf("Can't create page %s: file %s already exists", title, filename)
+		return nil
+	}
+	empty := []byte(`{"ops":[{"insert":"\n"}]}`)
+	err := os.WriteFile(filename, empty, 0644)
+	if err != nil {
+		errorLog.Printf("Failed to write page %s", title)
+		return nil
+	}
+	return &node
+}
+
+func (nb *Notebook) DeletePage(id string) error {
+	//todo: optimize?
+	newRoot := nb.Pages[:0]
+	var deleted *PageNode
+	for i := range nb.Pages {
+		if nb.Pages[i].ID == id {
+			copy := nb.Pages[i]
+			deleted = &copy
+			continue
+		}
+		d := nb.Pages[i].DeleteChildPage(id)
+		if d != nil {
+			deleted = d
+		}
+		newRoot = append(newRoot, nb.Pages[i])
+	}
+	nb.Pages = newRoot
+	if deleted == nil {
+		err := fmt.Errorf("Error deleting page id='%s': page not found", id)
+		errorLog.Printf(err.Error())
+		return err
+	}
+	filePath := filepath.Join(CONF.pagesDir, deleted.File)
+	err := os.Remove(filePath)
+	if err != nil {
+		errorLog.Printf("Can't remove file '%s' while deleting page id='%s': %s", filePath, id, err)
+		return err
+	}
+	return nil
+}
+
+func (p *PageNode) DeleteChildPage(id string) *PageNode {
+	newChildren := p.Children[:0]
+	var deleted *PageNode
+	for i := range p.Children {
+		if p.Children[i].ID == id {
+			copy := p.Children[i]
+			deleted = &copy
+			continue
+		}
+		if d := p.Children[i].DeleteChildPage(id); d != nil {
+			deleted = d
+		}
+		newChildren = append(newChildren, p.Children[i])
+	}
+	p.Children = newChildren
+	return deleted
+}
+
+func (nb *Notebook) RenamePage(id string, newTitle string) error {
+	page := nb.FindPage(id)
+	if page == nil {
+		return fmt.Errorf("page not found: %s", id)
+	}
+	page.Title = newTitle
+	return nil
 }
 
 type Response struct {
@@ -182,16 +337,9 @@ func httpPages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, code)
 		return
 	}
-	pages, selected := loadPages()
-	resp := struct {
-		Pages    []string `json:"pages"`
-		Selected string   `json:"selected"`
-	}{
-		Pages:    pages,
-		Selected: selected,
-	}
+	nb := loadNotebook()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(nb)
 }
 
 func httpPage(w http.ResponseWriter, r *http.Request) {
@@ -200,21 +348,21 @@ func httpPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, code)
 		return
 	}
-	name := r.URL.Query().Get("name")
-	if name == "" {
-		http.Error(w, "Missing name", 400)
-		return
-	}
-	path := filepath.Join(CONF.pagesDir, name+".json")
-	delta, err := ioutil.ReadFile(path)
-	if err != nil {
+	id := r.URL.Query().Get("id")
+	nb := loadNotebook()
+	page := nb.FindPage(id)
+	if page == nil {
+		errorLog.Printf("Page with id=%s not found", id)
 		http.Error(w, "Page not found", 404)
-		return
+	}
+	delta := page.ReadPage()
+	if delta == nil {
+		http.Error(w, "Can't read page", 500)
 	}
 	resp := struct {
-		Name  string          `json:"name"`
+		Title string          `json:"title"`
 		Delta json.RawMessage `json:"delta"`
-	}{Name: name, Delta: json.RawMessage(delta)}
+	}{Title: page.Title, Delta: delta}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -230,14 +378,20 @@ func httpSavePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name  string          `json:"name"`
+		Id    string          `json:"id"`
 		Delta json.RawMessage `json:"delta"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	path := filepath.Join(CONF.pagesDir, req.Name+".json")
+	nb := loadNotebook()
+	page := nb.FindPage(req.Id)
+	if page == nil {
+		http.Error(w, "Page not found", http.StatusNotFound)
+		return
+	}
+	path := filepath.Join(CONF.pagesDir, page.File)
 	if err := ioutil.WriteFile(path, []byte(req.Delta), 0644); err != nil {
 		http.Error(w, "Failed to save page", http.StatusInternalServerError)
 		return
@@ -257,35 +411,28 @@ func httpCreatePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name string `json:"name"`
+		Title  string `json:"title"`
+		Parent string `json:"parent"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		http.Error(w, "Invalid JSON", 400)
 		return
 	}
-	if req.Name == "" {
-		http.Error(w, "Missing page name", 400)
+
+	nb := loadNotebook()
+	p := nb.CreatePage(req.Title)
+	err = nb.InsertPage(req.Parent, *p)
+	if err != nil {
+		http.Error(w, err.Error(), 404)
 		return
 	}
+	saveNotebook(nb)
 
-	filename := filepath.Join(CONF.pagesDir, req.Name+".json")
-	if _, err := os.Stat(filename); err == nil {
-		http.Error(w, "Page already exists", 409)
-		return
-	}
-
-	empty := []byte(`{"ops":[{"insert":"\n"}]}`)
-	if err := os.WriteFile(filename, empty, 0644); err != nil {
-		http.Error(w, "Failed to write page", 500)
-		return
-	}
-
-	pages, _ := loadPages()
 	resp := struct {
-		Pages []string `json:"pages"`
-	}{
-		Pages: pages,
-	}
+		Nb    Notebook `json:"notebook"`
+		NewId string   `json:"id"`
+	}{Nb: nb, NewId: p.ID}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -301,34 +448,24 @@ func httpDeletePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Name string `json:"name"`
+		Id string `json:"id"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
 		http.Error(w, "Invalid JSON", 400)
 		return
 	}
-	if req.Name == "" {
-		http.Error(w, "Missing page name", 400)
+
+	nb := loadNotebook()
+	err = nb.DeletePage(req.Id)
+	if err != nil {
+		http.Error(w, "Error deleting page", 400)
 		return
 	}
-
-	filename := filepath.Join(CONF.pagesDir, req.Name+".json")
-	if err := os.Remove(filename); err != nil {
-		http.Error(w, "Failed to delete page", 500)
-		return
-	}
-
-	pages, selected := loadPages()
-	resp := struct {
-		Pages    []string `json:"pages"`
-		Selected string   `json:"selected"`
-	}{
-		Pages:    pages,
-		Selected: selected,
-	}
+	saveNotebook(nb)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(nb)
 }
 
 func httpRenamePage(w http.ResponseWriter, r *http.Request) {
@@ -338,32 +475,25 @@ func httpRenamePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		OldName string `json:"oldName"`
-		NewName string `json:"newName"`
+		Id    string `json:"id"`
+		Title string `json:"title"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	if req.OldName == "" || req.NewName == "" {
-		http.Error(w, "Missing name", http.StatusBadRequest)
+	if req.Id == "" || req.Title == "" {
+		http.Error(w, "Missing ID or Title", http.StatusBadRequest)
 		return
 	}
-	oldPath := filepath.Join(CONF.pagesDir, req.OldName+".json")
-	newPath := filepath.Join(CONF.pagesDir, req.NewName+".json")
-	if _, statErr := os.Stat(CONF.pagesDir); statErr != nil {
-		http.Error(w, "Pages directory missing", http.StatusInternalServerError)
+
+	nb := loadNotebook()
+	if err := nb.RenamePage(req.Id, req.Title); err != nil {
+		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	if err := os.Rename(oldPath, newPath); err != nil {
-		http.Error(w, "Rename failed", http.StatusInternalServerError)
-		return
-	}
-	resp := struct {
-		Ok bool `json:"ok"`
-	}{
-		Ok: true,
-	}
+	saveNotebook(nb)
+
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(resp)
+	json.NewEncoder(w).Encode(nb)
 }

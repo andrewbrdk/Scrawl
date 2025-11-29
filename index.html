@@ -97,7 +97,7 @@ class XScrawl extends HTMLElement {
 	#pagetitle = null;
 	#editor = null;
 	#quill = null;
-	#pages = null;
+	#notebook = null;
 	#selected = null;
 
 	getDisplayedState() {
@@ -136,8 +136,7 @@ class XScrawl extends HTMLElement {
 	}
 
 	async init(p) {
-		this.#pages = p.pages;
-		this.#selected = p.selected;
+		this.#notebook = p;
 		await this.render();
 	}
 
@@ -150,18 +149,28 @@ class XScrawl extends HTMLElement {
 
 	async updatePages() {
 		this.#ul.innerHTML = "";
-		if (!this.#pages) return;
-		this.#pages.forEach(page => {
-			const li = document.createElement("li");
-			li.innerHTML = `
-				<span class="title">${page}</span>
-				<button class="delete">✕</button>
-			`;
-			if (page === this.#selected) {
-				li.classList.add("selected");
-			}
-			this.#ul.appendChild(li);
-		});
+		if (!this.#notebook) return;
+		//todo: simplify
+		const createPageList = (pages) => {
+			const ul = document.createElement("ul");
+			pages.forEach(page => {
+				const li = document.createElement("li");
+				li.dataset.id = page.id;
+				li.innerHTML = `
+					<span class="title">${escapeHTML(page.title)}</span>
+					<button class="delete">✕</button>
+				`;
+				if (page.id === this.#selected) li.classList.add("selected");
+				if (page.children && page.children.length > 0) {
+					const childUl = createPageList(page.children);
+					li.appendChild(childUl);
+				}
+				ul.appendChild(li);
+			});
+			return ul;
+		};
+		const nestedUl = createPageList(this.#notebook.pages);
+		this.#ul.appendChild(nestedUl);
 	}
 
 	bindEvents() {
@@ -176,13 +185,12 @@ class XScrawl extends HTMLElement {
 		this.querySelectorAll("aside li").forEach(li => {
         	li.onclick = () => {
 				this.savePage();
-				const page = li.querySelector(".title").textContent;
-				this.#selected = page;
+				this.#selected = li.dataset.id;
 				this.render();
 			};
-			li.querySelector(".delete").onclick = (e) => {
+			li.querySelector(".delete").onclick = async (e) => {
 				e.stopPropagation();
-				this.deletePage(li.querySelector(".title").textContent);
+				await this.deletePage(li.dataset.id);
 			};
 		});
 
@@ -200,12 +208,24 @@ class XScrawl extends HTMLElement {
 	}
 
 	updateTitle() {
-		this.#pagetitle.value = this.#selected ?? "";
+		this.#pagetitle.value = this.getPageTitleById(this.#selected) ?? "";
+	}
+
+	getPageTitleById(id) {
+		if (!id) return null;
+		for (const page of this.#notebook.pages) {
+			if (page.id === id) return page.title;
+			if (page.children && page.children.length > 0) {
+				const title = this.getPageTitleById(id, page.children);
+				if (title) return title;
+			}
+		}
+		return null;
 	}
 
 	async updateEditor() {
         if (!this.#selected) return;
-		const res = await fetch('/page?name=' + encodeURIComponent(this.#selected));
+		const res = await fetch('/page?id=' + encodeURIComponent(this.#selected));
 		if (res.ok) {
 			const data = await res.json();
 			this.#quill.setContents(data.delta);
@@ -220,78 +240,65 @@ class XScrawl extends HTMLElement {
 		const res = await fetch('/save', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				name: this.#selected,
-				delta
-			})
+			body: JSON.stringify({id: this.#selected, delta: delta})
 		});
 		if (!res.ok) {
 			console.error("Failed to auto-save page:", this.#selected);
 		}
 	}
 
-	async createPage(name) {
+	async createPage(title) {
 		const res = await fetch('/create', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name })
+			body: JSON.stringify({ title: title, parent: "" })
 		});
 		if (!res.ok) {
 			console.error("Failed to create page");
 			return;
 		}
 		const data = await res.json();
-		this.#pages = data.pages;
-		this.#selected = name;
+		this.#notebook = data.notebook;
+		this.#selected = data.id;
 		await this.render();
 	}
 
-	async deletePage(name) {
-		if (!confirm(`Delete page "${name}"?`)) return;
+	async deletePage(id) {
+		if (!confirm(`Delete page "${this.getPageTitleById(id)}"?`)) return;
 		const res = await fetch('/delete', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name }),
+			body: JSON.stringify({ id }),
 		});
 		if (!res.ok) {
 			console.error("Failed to delete page");
 			return;
 		}
 		const data = await res.json();
-		this.#pages = data.pages;
-		this.#selected = data.selected;
+		this.#notebook = data;
+		this.#selected = null;
 		await this.render();
 	}
 
 	async saveTitleChange() {
-		const newName = this.#pagetitle.value.trim();
-		const oldName = this.#selected;
-		if (!newName || newName === oldName) return;
-		const ok = await this.renamePage(oldName, newName);
-		if (!ok) {
-			console.error("Rename failed");
-			this.#pagetitle.value = oldName;
-			return;
-		}
-		const idx = this.#pages.indexOf(oldName);
-		if (idx !== -1) {
-			this.#pages[idx] = newName;
-		}
-		this.#selected = newName;
-		this.render();
-	}
-
-	async renamePage(oldName, newName) {
+		const newTitle = this.#pagetitle.value.trim();
+		const oldTitle = this.getPageTitleById(this.#selected);
+		if (!newTitle || newTitle === oldTitle) return;
+		
 		const res = await fetch('/rename', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ oldName, newName })
+			body: JSON.stringify({ id: this.#selected, title: newTitle })
 		});
-		if (!res.ok) return false;
+		if (!res.ok) {
+			console.error("Rename failed");
+			this.#pagetitle.value = oldTitle;
+			return;
+		}
 		const data = await res.json();
-		return data.ok === true;
+		this.#notebook = data;
+		this.render();
 	}
-
 }
 
 function escapeHTML(str) {
