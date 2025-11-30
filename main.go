@@ -40,17 +40,14 @@ type Config struct {
 }
 
 type Notebook struct {
-	Name  string     `json:"name"`
-	Pages []PageNode `json:"pages"`
-	//todo: []PageNode -> []*PageNode
+	Name  string  `json:"name"`
+	Pages []*Page `json:"pages"`
 }
 
-type PageNode struct {
-	//todo: rename PageNode -> Page
-	ID       string     `json:"id"`
-	Title    string     `json:"title"`
-	Children []PageNode `json:"children"`
-	//todo: []PageNode -> []*PageNode
+type Page struct {
+	ID       string  `json:"id"`
+	Title    string  `json:"title"`
+	Children []*Page `json:"children"`
 	//todo: Delta   string     `json:"delta"`
 }
 
@@ -136,9 +133,9 @@ func (S *Scrawl) loadNotebook() error {
 	}
 	defer rows.Close()
 
-	pages := map[string]*PageNode{}
-	top := []*PageNode{}
-	children := map[string][]*PageNode{}
+	pages := map[string]*Page{}
+	top := []*Page{}
+	children := map[string][]*Page{}
 
 	for rows.Next() {
 		var id, title string
@@ -148,10 +145,10 @@ func (S *Scrawl) loadNotebook() error {
 			errorLog.Printf("loadNotebook scan error: %v", err)
 			return nil
 		}
-		page := &PageNode{
+		page := &Page{
 			ID:       id,
 			Title:    title,
-			Children: []PageNode{},
+			Children: []*Page{},
 		}
 		pages[id] = page
 		if parentID.Valid {
@@ -162,16 +159,16 @@ func (S *Scrawl) loadNotebook() error {
 	}
 	for pid, kids := range children {
 		for _, kid := range kids {
-			pages[pid].Children = append(pages[pid].Children, *kid)
+			pages[pid].Children = append(pages[pid].Children, kid)
 		}
 	}
 	//todo: child pages sometimes missing, pointers?
 	nb := Notebook{
 		Name:  "Notebook",
-		Pages: []PageNode{},
+		Pages: []*Page{},
 	}
 	for _, p := range top {
-		nb.Pages = append(nb.Pages, *p)
+		nb.Pages = append(nb.Pages, p)
 	}
 	S.notebook = &nb
 
@@ -185,7 +182,7 @@ func generateID() string {
 	return fmt.Sprintf("%x", b)
 }
 
-func (nb *Notebook) FindPage(id string) *PageNode {
+func (nb *Notebook) FindPage(id string) *Page {
 	for i := range nb.Pages {
 		p := nb.Pages[i].FindPage(id)
 		if p != nil {
@@ -195,7 +192,7 @@ func (nb *Notebook) FindPage(id string) *PageNode {
 	return nil
 }
 
-func (p *PageNode) FindPage(id string) *PageNode {
+func (p *Page) FindPage(id string) *Page {
 	if p.ID == id {
 		return p
 	}
@@ -208,7 +205,7 @@ func (p *PageNode) FindPage(id string) *PageNode {
 	return nil
 }
 
-func (p *PageNode) ReadPage() json.RawMessage {
+func (p *Page) ReadPage() json.RawMessage {
 	var delta string
 	infoLog.Printf("Reading page '%s' (id='%s')", p.Title, p.ID)
 	err := SCRAWL.db.QueryRow("SELECT delta FROM pages WHERE id=?", p.ID).Scan(&delta)
@@ -260,7 +257,7 @@ func (nb *Notebook) CreatePage(title string, parentID string) (string, error) {
 	return id, nil
 }
 
-func (nb *Notebook) SavePage(p *PageNode, delta string) error {
+func (nb *Notebook) SavePage(p *Page, delta string) error {
 	err := p.Save(delta)
 	if err != nil {
 		return err
@@ -269,8 +266,8 @@ func (nb *Notebook) SavePage(p *PageNode, delta string) error {
 	return nil
 }
 
-func (p *PageNode) Save(delta string) error {
-	//todo: add delta to PageNode struct
+func (p *Page) Save(delta string) error {
+	//todo: add delta to Page struct
 	_, err := SCRAWL.db.Exec(`
 		INSERT INTO pages (id, title, delta, created_at, updated_at)
 		VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
