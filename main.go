@@ -98,7 +98,7 @@ func (S *Scrawl) initDB() {
 
         CREATE TABLE IF NOT EXISTS tree (
             parent_id TEXT NOT NULL,
-			child_id TEXT NOT NULL,
+			child_id TEXT NOT NULL UNIQUE,
 			PRIMARY KEY(parent_id, child_id),
 			FOREIGN KEY(parent_id) REFERENCES pages(id) ON DELETE CASCADE,
 			FOREIGN KEY(child_id) REFERENCES pages(id) ON DELETE CASCADE
@@ -142,26 +142,30 @@ func (S *Scrawl) loadNotebook() error {
 
 	for rows.Next() {
 		var id, title string
-		var parentID *string
-		rows.Scan(&id, &title, &parentID)
+		var parentID sql.NullString
+		err := rows.Scan(&id, &title, &parentID)
+		if err != nil {
+			errorLog.Printf("loadNotebook scan error: %v", err)
+			return nil
+		}
 		page := &PageNode{
 			ID:       id,
 			Title:    title,
 			Children: []PageNode{},
 		}
 		pages[id] = page
-		if parentID == nil {
-			top = append(top, page)
+		if parentID.Valid {
+			children[parentID.String] = append(children[parentID.String], page)
 		} else {
-			children[*parentID] = append(children[*parentID], page)
+			top = append(top, page)
 		}
 	}
-
 	for pid, kids := range children {
 		for _, kid := range kids {
 			pages[pid].Children = append(pages[pid].Children, *kid)
 		}
 	}
+	//todo: child pages sometimes missing, pointers?
 	nb := Notebook{
 		Name:  "Notebook",
 		Pages: []PageNode{},
@@ -442,10 +446,12 @@ func httpPage(w http.ResponseWriter, r *http.Request) {
 	if page == nil {
 		errorLog.Printf("Page with id=%s not found", id)
 		http.Error(w, "Page not found", 404)
+		return
 	}
 	delta := page.ReadPage()
 	if delta == nil {
 		http.Error(w, "Can't read page", 500)
+		return
 	}
 	resp := struct {
 		Title string          `json:"title"`
