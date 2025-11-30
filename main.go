@@ -91,7 +91,9 @@ func (S *Scrawl) initDB() {
         CREATE TABLE IF NOT EXISTS pages (
             id TEXT PRIMARY KEY,
             title TEXT NOT NULL,
-            delta TEXT NOT NULL
+            delta TEXT NOT NULL,
+			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS tree (
@@ -229,8 +231,8 @@ func (nb *Notebook) CreatePage(title string, parentID string) (string, error) {
 	}()
 	//todo: create in-memory page?
 	_, err = tx.Exec(`
-        INSERT INTO pages(id, title, delta)
-        VALUES (?, ?, ?)
+        INSERT INTO pages(id, title, delta, created_at, updated_at)
+        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `, id, title, delta)
 	if err != nil {
 		errorLog.Printf("Failed to insert page: %v", err)
@@ -266,10 +268,13 @@ func (nb *Notebook) SavePage(p *PageNode, delta string) error {
 func (p *PageNode) Save(delta string) error {
 	//todo: add delta to PageNode struct
 	_, err := SCRAWL.db.Exec(`
-        INSERT INTO pages(id, title, delta)
-        VALUES (?, ?, ?)
-        ON CONFLICT(id) DO UPDATE SET delta = excluded.delta
-    `, p.ID, p.Title, delta)
+		INSERT INTO pages (id, title, delta, created_at, updated_at)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+		ON CONFLICT(id) DO UPDATE SET
+			title      = excluded.title,
+			delta      = excluded.delta,
+			updated_at = CURRENT_TIMESTAMP
+	`, p.ID, p.Title, delta)
 	if err != nil {
 		errorLog.Printf("Failed to save page '%s': %v", p.ID, err)
 	}
@@ -314,7 +319,7 @@ func (nb *Notebook) DeletePage(id string) error {
 func (nb *Notebook) RenamePage(id string, newTitle string) error {
 	res, err := SCRAWL.db.Exec(`
         UPDATE pages
-        SET title = ?
+        SET title = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
     `, newTitle, id)
 	if err != nil {
