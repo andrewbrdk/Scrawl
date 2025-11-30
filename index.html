@@ -192,9 +192,7 @@ class XScrawl extends HTMLElement {
 		this.unbindEvents();
 
 		this.querySelector("#newpage").onclick = () => {
-			const title = prompt("Enter page title:");
-			if (!title) return;
-			this.createPage(title);
+			this.createPage("New Page", null);
 		};
 
 		this.querySelectorAll("aside li").forEach(li => {
@@ -216,10 +214,8 @@ class XScrawl extends HTMLElement {
 				await this.deletePage(li.dataset.id);
 			};
 			li.querySelector(".addchild").onclick = (e) => {
-				const title = prompt("Enter page title:");
-				if (!title) return;
 				e.stopPropagation();
-				this.createPage(title, li.dataset.id);
+				this.createPage("New Page", li.dataset.id);
 			};
 			li.querySelector(".collapse").onclick = (e) => {
 				e.stopPropagation();

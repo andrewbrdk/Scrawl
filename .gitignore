@@ -2,3 +2,4 @@ scrawl
 go.sum
 .vscode
 *.db
+*.db-journal
