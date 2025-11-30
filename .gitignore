@@ -1,4 +1,4 @@
 scrawl
 go.sum
 .vscode
-pages
+*.db

@@ -2,17 +2,17 @@ package main
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"embed"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	_ "github.com/mattn/go-sqlite3"
 )
 
 //go:embed index.html style.css
@@ -24,29 +24,40 @@ var infoLog *log.Logger
 var errorLog *log.Logger
 
 var CONF Config
+var SCRAWL Scrawl
+
+// todo: limit usage of global vars
+type Scrawl struct {
+	db       *sql.DB
+	notebook *Notebook
+	//add config
+}
 
 type Config struct {
 	port     string
-	pagesDir string
+	dbFile   string
 	password string
 }
 
 type Notebook struct {
 	Name  string     `json:"name"`
 	Pages []PageNode `json:"pages"`
-	//todo: []*Page
+	//todo: []PageNode -> []*PageNode
 }
 
 type PageNode struct {
+	//todo: rename PageNode -> Page
 	ID       string     `json:"id"`
 	Title    string     `json:"title"`
-	File     string     `json:"file"` //todo: save, don't export
 	Children []PageNode `json:"children"`
-	//todo: []*Page
+	//todo: []PageNode -> []*PageNode
+	//todo: Delta   string     `json:"delta"`
 }
 
 func main() {
 	initConfig()
+	SCRAWL.initDB()
+	SCRAWL.loadNotebook()
 	jwtSecretKey = generateRandomKey(32)
 	infoLog = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLog = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
@@ -56,15 +67,45 @@ func main() {
 
 func initConfig() {
 	CONF.port = ":8080"
-	CONF.pagesDir = "./pages"
+	CONF.dbFile = "./scrawls.db"
 	CONF.password = ""
 	if port := os.Getenv("SCRAWL_PORT"); port != "" {
 		CONF.port = ":" + port
 	}
-	if pagesDir := os.Getenv("SCRAWL_PAGES"); pagesDir != "" {
-		CONF.pagesDir = pagesDir
+	if dbFile := os.Getenv("SCRAWL_DBFILE"); dbFile != "" {
+		CONF.dbFile = dbFile
 	}
 	CONF.password = os.Getenv("SCRAWL_PASSWORD")
+}
+
+func (S *Scrawl) initDB() {
+	var err error
+	S.db, err = sql.Open("sqlite3", CONF.dbFile)
+	if err != nil {
+		log.Fatalf("cannot open sqlite db: %v", err)
+	}
+
+	_, err = S.db.Exec(`
+        PRAGMA foreign_keys = ON;
+
+        CREATE TABLE IF NOT EXISTS pages (
+            id TEXT PRIMARY KEY,
+            title TEXT NOT NULL,
+            delta TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS tree (
+            parent_id TEXT NOT NULL,
+			child_id TEXT NOT NULL,
+			PRIMARY KEY(parent_id, child_id),
+			FOREIGN KEY(parent_id) REFERENCES pages(id) ON DELETE CASCADE,
+			FOREIGN KEY(child_id) REFERENCES pages(id) ON DELETE CASCADE
+        );
+    `)
+
+	if err != nil {
+		log.Fatalf("sqlite migration failed: %v", err)
+	}
 }
 
 func generateRandomKey(size int) []byte {
@@ -77,37 +118,58 @@ func generateRandomKey(size int) []byte {
 	return key
 }
 
-func loadNotebook() Notebook {
-	if _, err := os.Stat(CONF.pagesDir); err != nil {
-		infoLog.Printf("Pages directory '%s' missing. Creating.", CONF.pagesDir)
-		if mkErr := os.MkdirAll(CONF.pagesDir, 0755); mkErr != nil {
-			errorLog.Printf("Failed to create pages directory: %s", CONF.pagesDir)
-			panic("Failed to create pages directory")
-		}
-		infoLog.Printf("Created pages directory: %s", CONF.pagesDir)
-	}
-
-	structurePath := filepath.Join(CONF.pagesDir, "structure.json")
-	data, err := os.ReadFile(structurePath)
+func (S *Scrawl) loadNotebook() error {
+	//todo: Notebook method
+	rows, err := S.db.Query(`
+        SELECT 
+			p.id, 
+			p.title, 
+			t.parent_id
+        FROM pages p
+        LEFT JOIN tree t ON p.id = t.child_id
+	`)
 	if err != nil {
-		infoLog.Printf("Creating new empty notebook")
-		nb := Notebook{
-			Name:  "Notebook",
-			Pages: []PageNode{},
+		errorLog.Printf("loadNotebook error: %v", err)
+		return nil
+	}
+	defer rows.Close()
+
+	pages := map[string]*PageNode{}
+	top := []*PageNode{}
+	children := map[string][]*PageNode{}
+
+	for rows.Next() {
+		var id, title string
+		var parentID *string
+		rows.Scan(&id, &title, &parentID)
+		page := &PageNode{
+			ID:       id,
+			Title:    title,
+			Children: []PageNode{},
 		}
-		saveNotebook(nb)
-		return nb
+		pages[id] = page
+		if parentID == nil {
+			top = append(top, page)
+		} else {
+			children[*parentID] = append(children[*parentID], page)
+		}
 	}
 
-	var nb Notebook
-	json.Unmarshal(data, &nb)
-	return nb
-}
+	for pid, kids := range children {
+		for _, kid := range kids {
+			pages[pid].Children = append(pages[pid].Children, *kid)
+		}
+	}
+	nb := Notebook{
+		Name:  "Notebook",
+		Pages: []PageNode{},
+	}
+	for _, p := range top {
+		nb.Pages = append(nb.Pages, *p)
+	}
+	S.notebook = &nb
 
-func saveNotebook(nb Notebook) {
-	structurePath := filepath.Join(CONF.pagesDir, "structure.json")
-	b, _ := json.MarshalIndent(nb, "", "  ")
-	os.WriteFile(structurePath, b, 0644)
+	return nil
 }
 
 func generateID() string {
@@ -141,106 +203,129 @@ func (p *PageNode) FindPage(id string) *PageNode {
 }
 
 func (p *PageNode) ReadPage() json.RawMessage {
-	path := filepath.Join(CONF.pagesDir, p.File)
-	infoLog.Printf("Reading %s", path)
-	delta, err := ioutil.ReadFile(path)
+	var delta string
+	infoLog.Printf("Reading page '%s' (id='%s')", p.Title, p.ID)
+	err := SCRAWL.db.QueryRow("SELECT delta FROM pages WHERE id=?", p.ID).Scan(&delta)
 	if err != nil {
 		errorLog.Printf("Can't read page '%s' (id='%s'): %s", p.Title, p.ID, err)
 		return nil
 	}
-	return delta
+	return json.RawMessage(delta)
 }
 
-func (nb *Notebook) InsertPage(parentID string, node PageNode) error {
-	if parentID == "" {
-		nb.Pages = append(nb.Pages, node)
-		return nil
+func (nb *Notebook) CreatePage(title string, parentID string) (string, error) {
+	id := generateID()
+	delta := `{"ops":[{"insert":"\n"}]}`
+	infoLog.Printf("Creating page '%s' (id='%s')", title, id)
+	tx, err := SCRAWL.db.Begin()
+	if err != nil {
+		errorLog.Printf("Failed to begin transaction: %v", err)
+		return "", err
 	}
-	parent := nb.FindPage(parentID)
-	if parent == nil {
-		return fmt.Errorf("parent not found: %s", parentID)
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+	//todo: create in-memory page?
+	_, err = tx.Exec(`
+        INSERT INTO pages(id, title, delta)
+        VALUES (?, ?, ?)
+    `, id, title, delta)
+	if err != nil {
+		errorLog.Printf("Failed to insert page: %v", err)
+		return "", err
 	}
-	parent.Children = append(parent.Children, node)
+	if parentID != "" {
+		_, err = tx.Exec(`
+            INSERT INTO tree(parent_id, child_id)
+            VALUES (?, ?)
+        `, parentID, id)
+		if err != nil {
+			errorLog.Printf("Failed to insert into tree: %v", err)
+			return "", err
+		}
+	}
+	if err = tx.Commit(); err != nil {
+		errorLog.Printf("Commit failed: %v", err)
+		return "", err
+	}
+	SCRAWL.loadNotebook()
+	return id, nil
+}
+
+func (nb *Notebook) SavePage(p *PageNode, delta string) error {
+	err := p.Save(delta)
+	if err != nil {
+		return err
+	}
+	SCRAWL.loadNotebook()
 	return nil
 }
 
-func (nb *Notebook) CreatePage(title string) *PageNode {
-	id := generateID()
-	node := PageNode{
-		ID:       id,
-		Title:    title,
-		File:     id + ".json",
-		Children: []PageNode{},
-	}
-	filename := filepath.Join(CONF.pagesDir, node.File)
-	if _, err := os.Stat(filename); err == nil {
-		errorLog.Printf("Can't create page %s: file %s already exists", title, filename)
-		return nil
-	}
-	empty := []byte(`{"ops":[{"insert":"\n"}]}`)
-	err := os.WriteFile(filename, empty, 0644)
+func (p *PageNode) Save(delta string) error {
+	//todo: add delta to PageNode struct
+	_, err := SCRAWL.db.Exec(`
+        INSERT INTO pages(id, title, delta)
+        VALUES (?, ?, ?)
+        ON CONFLICT(id) DO UPDATE SET delta = excluded.delta
+    `, p.ID, p.Title, delta)
 	if err != nil {
-		errorLog.Printf("Failed to write page %s", title)
-		return nil
+		errorLog.Printf("Failed to save page '%s': %v", p.ID, err)
 	}
-	return &node
+	return err
 }
 
 func (nb *Notebook) DeletePage(id string) error {
-	//todo: optimize?
-	newRoot := nb.Pages[:0]
-	var deleted *PageNode
-	for i := range nb.Pages {
-		if nb.Pages[i].ID == id {
-			copy := nb.Pages[i]
-			deleted = &copy
-			continue
-		}
-		d := nb.Pages[i].DeleteChildPage(id)
-		if d != nil {
-			deleted = d
-		}
-		newRoot = append(newRoot, nb.Pages[i])
-	}
-	nb.Pages = newRoot
-	if deleted == nil {
-		err := fmt.Errorf("Error deleting page id='%s': page not found", id)
-		errorLog.Printf(err.Error())
-		return err
-	}
-	filePath := filepath.Join(CONF.pagesDir, deleted.File)
-	err := os.Remove(filePath)
+	tx, err := SCRAWL.db.Begin()
 	if err != nil {
-		errorLog.Printf("Can't remove file '%s' while deleting page id='%s': %s", filePath, id, err)
 		return err
 	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+	_, err = tx.Exec(`
+        WITH RECURSIVE descendants(id) AS (
+            SELECT ? as id
+            UNION ALL
+            SELECT child_id
+            FROM tree
+            JOIN descendants 
+				ON tree.parent_id = descendants.id
+        )
+        DELETE FROM pages
+        WHERE id IN (SELECT id FROM descendants)
+    `, id)
+	if err != nil {
+		errorLog.Printf("Failed deleting pages recursively: %v", err)
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		errorLog.Printf("Commit failed during delete: %v", err)
+		return err
+	}
+	SCRAWL.loadNotebook()
 	return nil
 }
 
-func (p *PageNode) DeleteChildPage(id string) *PageNode {
-	newChildren := p.Children[:0]
-	var deleted *PageNode
-	for i := range p.Children {
-		if p.Children[i].ID == id {
-			copy := p.Children[i]
-			deleted = &copy
-			continue
-		}
-		if d := p.Children[i].DeleteChildPage(id); d != nil {
-			deleted = d
-		}
-		newChildren = append(newChildren, p.Children[i])
-	}
-	p.Children = newChildren
-	return deleted
-}
-
 func (nb *Notebook) RenamePage(id string, newTitle string) error {
-	page := nb.FindPage(id)
-	if page == nil {
+	res, err := SCRAWL.db.Exec(`
+        UPDATE pages
+        SET title = ?
+        WHERE id = ?
+    `, newTitle, id)
+	if err != nil {
+		errorLog.Printf("Failed to rename page '%s': %v", id, err)
+		return err
+	}
+	rowsAffected, _ := res.RowsAffected()
+	if rowsAffected == 0 {
 		return fmt.Errorf("page not found: %s", id)
 	}
-	page.Title = newTitle
+	SCRAWL.loadNotebook()
 	return nil
 }
 
@@ -337,9 +422,8 @@ func httpPages(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, code)
 		return
 	}
-	nb := loadNotebook()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(nb)
+	json.NewEncoder(w).Encode(SCRAWL.notebook)
 }
 
 func httpPage(w http.ResponseWriter, r *http.Request) {
@@ -349,8 +433,7 @@ func httpPage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	id := r.URL.Query().Get("id")
-	nb := loadNotebook()
-	page := nb.FindPage(id)
+	page := SCRAWL.notebook.FindPage(id)
 	if page == nil {
 		errorLog.Printf("Page with id=%s not found", id)
 		http.Error(w, "Page not found", 404)
@@ -385,14 +468,13 @@ func httpSavePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	nb := loadNotebook()
-	page := nb.FindPage(req.Id)
+	page := SCRAWL.notebook.FindPage(req.Id)
 	if page == nil {
 		http.Error(w, "Page not found", http.StatusNotFound)
 		return
 	}
-	path := filepath.Join(CONF.pagesDir, page.File)
-	if err := ioutil.WriteFile(path, []byte(req.Delta), 0644); err != nil {
+	err = SCRAWL.notebook.SavePage(page, string(req.Delta))
+	if err != nil {
 		http.Error(w, "Failed to save page", http.StatusInternalServerError)
 		return
 	}
@@ -420,19 +502,16 @@ func httpCreatePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nb := loadNotebook()
-	p := nb.CreatePage(req.Title)
-	err = nb.InsertPage(req.Parent, *p)
+	newId, err := SCRAWL.notebook.CreatePage(req.Title, req.Parent)
 	if err != nil {
 		http.Error(w, err.Error(), 404)
 		return
 	}
-	saveNotebook(nb)
 
 	resp := struct {
 		Nb    Notebook `json:"notebook"`
 		NewId string   `json:"id"`
-	}{Nb: nb, NewId: p.ID}
+	}{Nb: *SCRAWL.notebook, NewId: newId}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -456,16 +535,13 @@ func httpDeletePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nb := loadNotebook()
-	err = nb.DeletePage(req.Id)
+	err = SCRAWL.notebook.DeletePage(req.Id)
 	if err != nil {
 		http.Error(w, "Error deleting page", 400)
 		return
 	}
-	saveNotebook(nb)
-
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(nb)
+	json.NewEncoder(w).Encode(SCRAWL.notebook)
 }
 
 func httpRenamePage(w http.ResponseWriter, r *http.Request) {
@@ -487,13 +563,12 @@ func httpRenamePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	nb := loadNotebook()
-	if err := nb.RenamePage(req.Id, req.Title); err != nil {
+	err = SCRAWL.notebook.RenamePage(req.Id, req.Title)
+	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-	saveNotebook(nb)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(nb)
+	json.NewEncoder(w).Encode(SCRAWL.notebook)
 }

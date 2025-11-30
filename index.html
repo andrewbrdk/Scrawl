@@ -290,6 +290,7 @@ class XScrawl extends HTMLElement {
 			return;
 		}
 		const data = await res.json();
+		if (parentId) this.#expanded[parentId] = true;
 		this.#notebook = data.notebook;
 		this.#selected = data.id;
 		await this.render();
