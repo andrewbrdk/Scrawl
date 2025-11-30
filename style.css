@@ -94,7 +94,10 @@ x-scrawl {
 			padding: 8px 10px;
 			margin-bottom: 4px;
 			cursor: pointer;
-			border-radius: 4px;
+			border-bottom: 1px solid transparent;
+		}
+		li:hover {
+			border-bottom-color: black;
 		}
 		.page-row {
 			display: flex;
@@ -110,9 +113,6 @@ x-scrawl {
 			display: flex;
 			align-items: center;
 			gap: 1rem;
-		}
-		li:hover {
-			background: #e2e2e2;
 		}
 		.page-row.selected {
 			font-weight: bold;
@@ -130,17 +130,20 @@ x-scrawl {
 			border: none;
 			background: transparent;
 			cursor: pointer;
-			font-weight: bold;
-			width: 0.8rem;
-    		min-width: 0.8rem;
+			width: 1rem;
+    		min-width: 1rem;
 			padding-left: 0;
+			font-size: 1.1em;
 		}
 		button.collapse.hide { /*todo: rename*/
 			visibility: hidden;
 		}
 		button.collapse.expanded {
-			padding: 5px; /*center vertically*/
+			padding-left: 0.4rem; /* vertical align */
 			transform: rotate(90deg);
+		}
+		button.collapse:hover {
+			color: red;
 		}
 		button.addchild {
 			border: none;

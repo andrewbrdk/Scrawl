@@ -154,6 +154,7 @@ class XScrawl extends HTMLElement {
 				const li = document.createElement("li");
 				li.dataset.id = page.id;
 				li.dataset.depth = depth;
+				li.dataset.haschildren = (page.children && page.children.length > 0);
 
 				const isSelected = (page.id === this.#selected ? "selected" : "");
 				const hasChildren = page.children && page.children.length > 0;
@@ -199,7 +200,15 @@ class XScrawl extends HTMLElement {
 		this.querySelectorAll("aside li").forEach(li => {
         	li.onclick = () => {
 				this.savePage();
-				this.#selected = li.dataset.id;
+				const id = li.dataset.id;
+				if (this.#selected == id && li.dataset.haschildren) {
+					if (id in this.#expanded) {
+						delete this.#expanded[id];
+					} else {
+						this.#expanded[id] = true;
+					}
+				}
+				this.#selected = id;
 				this.render();
 			};
 			li.querySelector(".delete").onclick = async (e) => {
