@@ -89,8 +89,8 @@ func (S *Scrawl) initDB() {
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             delta TEXT NOT NULL,
-			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+			created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    		updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
         CREATE TABLE IF NOT EXISTS children (
@@ -220,7 +220,7 @@ func (nb *Notebook) CreatePage(title string, parentID int) (int, error) {
 		}
 	}()
 	res, err := tx.Exec(`
-        INSERT INTO pages(title, delta, created_at, updated_at)
+        INSERT INTO pages(title, delta, created, updated)
         VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
     `, title, delta)
 	if err != nil {
@@ -263,7 +263,7 @@ func (p *Page) Save(delta string) error {
 	//todo: upsert?
 	_, err := SCRAWL.db.Exec(`
 		UPDATE pages
-        SET title = ?, delta = ?, updated_at = CURRENT_TIMESTAMP
+        SET title = ?, delta = ?, updated = CURRENT_TIMESTAMP
         WHERE id = ?
 	`, p.Title, delta, p.Id)
 	if err != nil {
@@ -310,7 +310,7 @@ func (nb *Notebook) DeletePage(id int) error {
 func (nb *Notebook) RenamePage(id int, newTitle string) error {
 	_, err := SCRAWL.db.Exec(`
         UPDATE pages
-        SET title = ?, updated_at = CURRENT_TIMESTAMP
+        SET title = ?, updated = CURRENT_TIMESTAMP
         WHERE id = ?
     `, newTitle, id)
 	if err != nil {
