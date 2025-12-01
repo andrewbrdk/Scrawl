@@ -106,11 +106,18 @@ class XScrawl extends HTMLElement {
 		super();
 		this.innerHTML = `
 			<aside>
+				<div class="sidebar-header">
+					<span>Pages</span>
+					<button id="hideSidebar"><</button>
+				</div>
 				<ul></ul>
 				<button id="newpage">Add Page</button>
 			</aside>
 			<div id="content">
-				<input id="pagetitle" type="text">
+				<div class="content-header">
+					<button id="showSidebar" hidden>☰</button>
+					<input id="pagetitle" type="text">
+				</div>
 				<div id="editor"></div>
 			</div>`;
 		this.#aside = this.querySelector('aside');
@@ -196,6 +203,16 @@ class XScrawl extends HTMLElement {
 
 	bindEvents() {
 		this.unbindEvents();
+
+		this.querySelector("#hideSidebar").onclick = () => {
+			this.#aside.classList.add("hidden");
+			this.querySelector("#showSidebar").hidden = false;
+		};
+
+		this.querySelector("#showSidebar").onclick = () => {
+			this.#aside.classList.remove("hidden");
+			this.querySelector("#showSidebar").hidden = true;
+		};
 
 		this.querySelector("#newpage").onclick = () => {
 			this.createPage("New Page", null);
@@ -354,7 +371,6 @@ function escapeHTML(str) {
 customElements.define('x-main', XMain);
 customElements.define('x-login', XLogin);
 customElements.define('x-scrawl', XScrawl);
-Quill.register('modules/imageResize', window.ImageResize);
 
 </script>
 </body>

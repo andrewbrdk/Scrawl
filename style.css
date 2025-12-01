@@ -81,11 +81,40 @@ x-scrawl {
 	aside {
 		width: 15%;
 		height: 100%;
-		padding: 12px;
+		padding: 0 0.6rem;
 		border-right: 1px solid black;
     	justify-content: space-between;
     	align-items: center;
 		
+		&.hidden {
+			display: none;
+		}
+		.sidebar-header {
+			display: flex;
+			justify-content: space-between;
+			font-weight: bold;
+			align-items: center;
+			min-height: 3rem;
+			height: 3rem;
+			padding-top: 0.5rem;
+			/*border-bottom: 1px solid #ddd;*/
+			box-sizing: border-box;
+		}
+		.sidebar-header span {
+			font-size: 1.5rem;
+			font-weight: bold;
+		}
+		#hideSidebar {
+			font-size: 1rem;
+			font-weight: bold;
+			cursor: pointer;
+			border-radius: 5px;
+			border: 1.5px solid black;
+			background-color: transparent;
+		}
+		#hideSidebar:hover {
+			box-shadow: 0 0 0px 1px black;
+		}
 		ul {
 			list-style: none;
 			padding: 0;
@@ -169,38 +198,59 @@ x-scrawl {
 		button.delete:hover {
 			color: red;
 		}
-
 	}
 	#content {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-	}
-	#pagetitle {
-		font-size: 1.6rem;
-		font-weight: bold;
-		border: none;
-		outline: none;
-		width: 100%;
-		background: transparent;
-		padding: 0;
-		margin-left: 1rem;
-		margin-top: 0.5rem;
-		font-family: inherit;
-		cursor: text; 
-	}
-	#pagetitle:focus {
-		border-bottom: 1px solid #ccc;
-		cursor: text;
-	}
-	#editor {
-		flex: 1;
-		border: none;
-		font-size: 1rem;
-	}
-	.ql-editor pre {
-		background: #f7f7f7;
-		padding: 8px;
-		border-radius: 4px;
+		padding: 0 0.6rem;
+	
+		.content-header {
+			display: flex;
+			align-items: center;
+			min-height: 3rem;
+			height: 3rem;
+			padding-top: 0.5rem;
+			/*border-bottom: 1px solid #ddd;*/
+			box-sizing: border-box;
+			
+			#showSidebar {
+				font-size: 1rem;
+				font-weight: bold;
+				cursor: pointer;
+				border-radius: 5px;
+				border: 1.5px solid black;
+				background-color: transparent;
+			}
+			#showSidebar:hover {
+				box-shadow: 0 0 0px 1px black;
+			}
+			#pagetitle {
+				font-size: 1.6rem;
+				font-weight: bold;
+				border: none;
+				outline: none;
+				width: 100%;
+				background: transparent;
+				padding: 0;
+				margin-left: 1rem;
+				font-family: inherit;
+				cursor: text; 
+			}
+			#pagetitle:focus {
+				border-bottom: 1px solid #ccc;
+				cursor: text;
+			}
+		}
+		#editor {
+			flex: 1;
+			border: none;
+			font-size: 1rem;
+		}
+		.ql-editor pre {
+			background: #f7f7f7;
+			padding: 8px;
+			border-radius: 4px;
+		}
 	}
 }
