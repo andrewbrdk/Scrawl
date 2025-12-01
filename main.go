@@ -5,10 +5,10 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
-	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -45,7 +45,7 @@ type Notebook struct {
 }
 
 type Page struct {
-	ID       string  `json:"id"`
+	Id       int     `json:"id"`
 	Title    string  `json:"title"`
 	Children []*Page `json:"children"`
 	//todo: Delta   string     `json:"delta"`
@@ -86,16 +86,16 @@ func (S *Scrawl) initDB() {
         PRAGMA foreign_keys = ON;
 
         CREATE TABLE IF NOT EXISTS pages (
-            id TEXT PRIMARY KEY,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             delta TEXT NOT NULL,
 			created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     		updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
-        CREATE TABLE IF NOT EXISTS tree (
-            parent_id TEXT NOT NULL,
-			child_id TEXT NOT NULL UNIQUE,
+        CREATE TABLE IF NOT EXISTS children (
+            parent_id INTEGER NOT NULL,
+			child_id INTEGER NOT NULL UNIQUE,
 			PRIMARY KEY(parent_id, child_id),
 			FOREIGN KEY(parent_id) REFERENCES pages(id) ON DELETE CASCADE,
 			FOREIGN KEY(child_id) REFERENCES pages(id) ON DELETE CASCADE
@@ -103,7 +103,7 @@ func (S *Scrawl) initDB() {
     `)
 
 	if err != nil {
-		log.Fatalf("sqlite migration failed: %v", err)
+		log.Fatalf("Can't create tables: %v", err)
 	}
 }
 
@@ -123,9 +123,10 @@ func (S *Scrawl) loadNotebook() error {
         SELECT 
 			p.id, 
 			p.title, 
-			t.parent_id
+			c.parent_id
         FROM pages p
-        LEFT JOIN tree t ON p.id = t.child_id
+        LEFT JOIN children c
+			ON p.id = c.child_id
 	`)
 	if err != nil {
 		errorLog.Printf("loadNotebook error: %v", err)
@@ -133,56 +134,44 @@ func (S *Scrawl) loadNotebook() error {
 	}
 	defer rows.Close()
 
-	pages := map[string]*Page{}
+	pages := map[int]*Page{}
 	top := []*Page{}
-	children := map[string][]*Page{}
+	children := map[int][]*Page{}
 
 	for rows.Next() {
-		var id, title string
-		var parentID sql.NullString
+		var id int
+		var title string
+		var parentID sql.NullInt64
 		err := rows.Scan(&id, &title, &parentID)
 		if err != nil {
 			errorLog.Printf("loadNotebook scan error: %v", err)
 			return nil
 		}
 		page := &Page{
-			ID:       id,
+			Id:       id,
 			Title:    title,
 			Children: []*Page{},
 		}
 		pages[id] = page
 		if parentID.Valid {
-			children[parentID.String] = append(children[parentID.String], page)
+			pid := int(parentID.Int64)
+			children[pid] = append(children[pid], page)
 		} else {
 			top = append(top, page)
 		}
 	}
 	for pid, kids := range children {
-		for _, kid := range kids {
-			pages[pid].Children = append(pages[pid].Children, kid)
-		}
+		parent := pages[pid]
+		parent.Children = append(parent.Children, kids...)
 	}
-	//todo: child pages sometimes missing, pointers?
-	nb := Notebook{
+	S.notebook = &Notebook{
 		Name:  "Notebook",
-		Pages: []*Page{},
+		Pages: top,
 	}
-	for _, p := range top {
-		nb.Pages = append(nb.Pages, p)
-	}
-	S.notebook = &nb
-
 	return nil
 }
 
-func generateID() string {
-	//todo: use other method; check overlap with existing
-	b := make([]byte, 8)
-	rand.Read(b)
-	return fmt.Sprintf("%x", b)
-}
-
-func (nb *Notebook) FindPage(id string) *Page {
+func (nb *Notebook) FindPage(id int) *Page {
 	for i := range nb.Pages {
 		p := nb.Pages[i].FindPage(id)
 		if p != nil {
@@ -192,8 +181,8 @@ func (nb *Notebook) FindPage(id string) *Page {
 	return nil
 }
 
-func (p *Page) FindPage(id string) *Page {
-	if p.ID == id {
+func (p *Page) FindPage(id int) *Page {
+	if p.Id == id {
 		return p
 	}
 	for i := range p.Children {
@@ -207,54 +196,57 @@ func (p *Page) FindPage(id string) *Page {
 
 func (p *Page) ReadPage() json.RawMessage {
 	var delta string
-	infoLog.Printf("Reading page '%s' (id='%s')", p.Title, p.ID)
-	err := SCRAWL.db.QueryRow("SELECT delta FROM pages WHERE id=?", p.ID).Scan(&delta)
+	infoLog.Printf("Reading page '%s' (id='%d')", p.Title, p.Id)
+	err := SCRAWL.db.QueryRow("SELECT delta FROM pages WHERE id=?", p.Id).Scan(&delta)
 	if err != nil {
-		errorLog.Printf("Can't read page '%s' (id='%s'): %s", p.Title, p.ID, err)
+		errorLog.Printf("Can't read page '%s' (id='%d'): %s", p.Title, p.Id, err)
 		return nil
 	}
 	return json.RawMessage(delta)
 }
 
-func (nb *Notebook) CreatePage(title string, parentID string) (string, error) {
-	id := generateID()
+func (nb *Notebook) CreatePage(title string, parentID int) (int, error) {
+	//todo: merge with SavePage
 	delta := `{"ops":[{"insert":"\n"}]}`
-	infoLog.Printf("Creating page '%s' (id='%s')", title, id)
+	infoLog.Printf("Creating page '%s'", title)
 	tx, err := SCRAWL.db.Begin()
 	if err != nil {
 		errorLog.Printf("Failed to begin transaction: %v", err)
-		return "", err
+		return 0, err
 	}
 	defer func() {
 		if err != nil {
 			tx.Rollback()
 		}
 	}()
-	//todo: create in-memory page?
-	_, err = tx.Exec(`
-        INSERT INTO pages(id, title, delta, created_at, updated_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `, id, title, delta)
+	res, err := tx.Exec(`
+        INSERT INTO pages(title, delta, created_at, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    `, title, delta)
 	if err != nil {
 		errorLog.Printf("Failed to insert page: %v", err)
-		return "", err
+		return 0, err
 	}
-	if parentID != "" {
+	newId, err := res.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	if parentID != 0 {
 		_, err = tx.Exec(`
-            INSERT INTO tree(parent_id, child_id)
+            INSERT INTO children(parent_id, child_id)
             VALUES (?, ?)
-        `, parentID, id)
+        `, parentID, newId)
 		if err != nil {
-			errorLog.Printf("Failed to insert into tree: %v", err)
-			return "", err
+			errorLog.Printf("Failed to insert into children: %v", err)
+			return 0, err
 		}
 	}
 	if err = tx.Commit(); err != nil {
 		errorLog.Printf("Commit failed: %v", err)
-		return "", err
+		return 0, err
 	}
 	SCRAWL.loadNotebook()
-	return id, nil
+	return int(newId), nil
 }
 
 func (nb *Notebook) SavePage(p *Page, delta string) error {
@@ -267,22 +259,20 @@ func (nb *Notebook) SavePage(p *Page, delta string) error {
 }
 
 func (p *Page) Save(delta string) error {
-	//todo: add delta to Page struct
+	//todo: merge with CreatePage
+	//todo: upsert?
 	_, err := SCRAWL.db.Exec(`
-		INSERT INTO pages (id, title, delta, created_at, updated_at)
-		VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-		ON CONFLICT(id) DO UPDATE SET
-			title      = excluded.title,
-			delta      = excluded.delta,
-			updated_at = CURRENT_TIMESTAMP
-	`, p.ID, p.Title, delta)
+		UPDATE pages
+        SET title = ?, delta = ?, updated_at = CURRENT_TIMESTAMP
+        WHERE id = ?
+	`, p.Title, delta, p.Id)
 	if err != nil {
-		errorLog.Printf("Failed to save page '%s': %v", p.ID, err)
+		errorLog.Printf("Failed to save page '%d': %v", p.Id, err)
 	}
 	return err
 }
 
-func (nb *Notebook) DeletePage(id string) error {
+func (nb *Notebook) DeletePage(id int) error {
 	tx, err := SCRAWL.db.Begin()
 	if err != nil {
 		return err
@@ -297,9 +287,9 @@ func (nb *Notebook) DeletePage(id string) error {
             SELECT ? as id
             UNION ALL
             SELECT child_id
-            FROM tree
+            FROM children
             JOIN descendants 
-				ON tree.parent_id = descendants.id
+				ON children.parent_id = descendants.id
         )
         DELETE FROM pages
         WHERE id IN (SELECT id FROM descendants)
@@ -317,19 +307,15 @@ func (nb *Notebook) DeletePage(id string) error {
 	return nil
 }
 
-func (nb *Notebook) RenamePage(id string, newTitle string) error {
-	res, err := SCRAWL.db.Exec(`
+func (nb *Notebook) RenamePage(id int, newTitle string) error {
+	_, err := SCRAWL.db.Exec(`
         UPDATE pages
         SET title = ?, updated_at = CURRENT_TIMESTAMP
         WHERE id = ?
     `, newTitle, id)
 	if err != nil {
-		errorLog.Printf("Failed to rename page '%s': %v", id, err)
+		errorLog.Printf("Failed to rename page id='%d': %v", id, err)
 		return err
-	}
-	rowsAffected, _ := res.RowsAffected()
-	if rowsAffected == 0 {
-		return fmt.Errorf("page not found: %s", id)
 	}
 	SCRAWL.loadNotebook()
 	return nil
@@ -438,10 +424,15 @@ func httpPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, msg, code)
 		return
 	}
-	id := r.URL.Query().Get("id")
+	idStr := r.URL.Query().Get("id")
+	id, err := strconv.Atoi(idStr)
+	if err != nil {
+		http.Error(w, "invalid id", http.StatusBadRequest)
+		return
+	}
 	page := SCRAWL.notebook.FindPage(id)
 	if page == nil {
-		errorLog.Printf("Page with id=%s not found", id)
+		errorLog.Printf("Page with id=%d not found", id)
 		http.Error(w, "Page not found", 404)
 		return
 	}
@@ -469,7 +460,7 @@ func httpSavePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Id    string          `json:"id"`
+		Id    int             `json:"id"`
 		Delta json.RawMessage `json:"delta"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -502,7 +493,7 @@ func httpCreatePage(w http.ResponseWriter, r *http.Request) {
 	}
 	var req struct {
 		Title  string `json:"title"`
-		Parent string `json:"parent"`
+		Parent int    `json:"parent"`
 	}
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -518,7 +509,7 @@ func httpCreatePage(w http.ResponseWriter, r *http.Request) {
 
 	resp := struct {
 		Nb    Notebook `json:"notebook"`
-		NewId string   `json:"id"`
+		NewId int      `json:"id"`
 	}{Nb: *SCRAWL.notebook, NewId: newId}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
@@ -535,7 +526,7 @@ func httpDeletePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Id string `json:"id"`
+		Id int `json:"id"`
 	}
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -559,14 +550,14 @@ func httpRenamePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Id    string `json:"id"`
+		Id    int    `json:"id"`
 		Title string `json:"title"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	if req.Id == "" || req.Title == "" {
+	if req.Id == 0 || req.Title == "" {
 		http.Error(w, "Missing ID or Title", http.StatusBadRequest)
 		return
 	}

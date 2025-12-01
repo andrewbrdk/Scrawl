@@ -201,9 +201,10 @@ class XScrawl extends HTMLElement {
 		};
 
 		this.querySelectorAll("aside li").forEach(li => {
+			//todo: avoid string-int conversion
+			const id = parseInt(li.dataset.id, 10);
         	li.onclick = () => {
 				this.savePage();
-				const id = li.dataset.id;
 				if (this.#selected == id && li.dataset.haschildren) {
 					if (id in this.#expanded) {
 						delete this.#expanded[id];
@@ -216,15 +217,14 @@ class XScrawl extends HTMLElement {
 			};
 			li.querySelector(".delete").onclick = async (e) => {
 				e.stopPropagation();
-				await this.deletePage(li.dataset.id);
+				await this.deletePage(id);
 			};
 			li.querySelector(".addchild").onclick = (e) => {
 				e.stopPropagation();
-				this.createPage("New Page", li.dataset.id);
+				this.createPage("New Page", id);
 			};
 			li.querySelector(".collapse").onclick = (e) => {
 				e.stopPropagation();
-				const id = li.dataset.id;
 				if (id in this.#expanded) {
 					delete this.#expanded[id];
 				} else {
@@ -293,7 +293,7 @@ class XScrawl extends HTMLElement {
 		const res = await fetch('/create', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ title: title, parent: parentId || "" })
+			body: JSON.stringify({ title: title, parent: parentId || 0 })
 		});
 		if (!res.ok) {
 			console.error("Failed to create page");

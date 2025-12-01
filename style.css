@@ -198,4 +198,9 @@ x-scrawl {
 		border: none;
 		font-size: 1rem;
 	}
+	.ql-editor pre {
+		background: #f7f7f7;
+		padding: 8px;
+		border-radius: 4px;
+	}
 }
