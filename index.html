@@ -122,6 +122,7 @@ class XScrawl extends HTMLElement {
 				modules: {
 					toolbar: [
 						['bold', 'italic', 'underline'],
+						['image'],
 						['code-block'],
 						['clean']
 					]
@@ -353,6 +354,7 @@ function escapeHTML(str) {
 customElements.define('x-main', XMain);
 customElements.define('x-login', XLogin);
 customElements.define('x-scrawl', XScrawl);
+Quill.register('modules/imageResize', window.ImageResize);
 
 </script>
 </body>
