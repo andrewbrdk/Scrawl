@@ -97,6 +97,7 @@ x-scrawl {
 			min-height: 3rem;
 			height: 3rem;
 			padding-top: 0.5rem;
+			padding-left: 10px; /* align with li padding */
 			/*border-bottom: 1px solid #ddd;*/
 			box-sizing: border-box;
 		}
@@ -125,8 +126,8 @@ x-scrawl {
 			cursor: pointer;
 			border-bottom: 1px solid transparent;
 		}
-		li:hover {
-			border-bottom-color: black;
+		li:hover span.title {
+			scale: 1.07;
 		}
 		.page-row {
 			display: flex;
@@ -172,7 +173,9 @@ x-scrawl {
 			transform: rotate(90deg);
 		}
 		button.collapse:hover {
-			color: red;
+			transform: scale(1.5) translateY(-2px);
+		}button.collapse.expanded:hover {
+			transform: scale(1.5) translateY(-2px) rotate(90deg);
 		}
 		button.addchild {
 			border: none;
@@ -184,7 +187,7 @@ x-scrawl {
 			text-align: center;
 		}
 		button.addchild:hover {
-			color: red;
+			scale: 1.5;
 		}
 		button.delete {
 			border: none;
@@ -197,6 +200,33 @@ x-scrawl {
 		}
 		button.delete:hover {
 			color: red;
+			scale: 1.5;
+		}
+		#newpage {
+			background: transparent;
+			font-weight: bold;
+			cursor: pointer;
+			margin-left: calc(10px + 1rem); /* align with li padding */
+			font-size: 1rem;
+			padding: 0;
+			width: 1.5rem;
+			height: 1.5rem;
+			line-height: 1.5rem;
+			text-align: center;
+			/* todo: fix vertical alignment */
+			opacity: 0;
+			pointer-events: none;
+			border-radius: 50%;
+			border: 1.5px solid black;
+		}
+		&:hover #newpage {
+			opacity: 1;
+			pointer-events: auto;
+		}
+		#newpage:hover {
+			box-shadow: 0 0 0 1px black;
+			text-shadow: 0 0 1px 1px black;
+			scale: 1.1;
 		}
 	}
 	#content {
