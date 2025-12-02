@@ -82,7 +82,6 @@ x-scrawl {
 		width: 15%;
 		height: 100%;
 		padding: 0 0.6rem;
-		border-right: 1px solid black;
     	justify-content: space-between;
     	align-items: center;
 		
@@ -138,6 +137,13 @@ x-scrawl {
 		.page-row .left {
 			display: flex;
 			align-items: center;
+		}
+		.page-row .left .title {
+			flex: 1;
+			min-width: 0;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
 		}
 		.page-row .right {
 			display: flex;
@@ -229,11 +235,37 @@ x-scrawl {
 			scale: 1.1;
 		}
 	}
+	#sidebar-control {
+		min-width: 1rem;
+		display: flex;
+		flex-direction: column;
+		justify-content: flex-start;
+		align-items: center;
+		border-right: 1px solid black;
+		cursor: col-resize;
+
+		#toggleSidebar {
+			width: 100%;
+			cursor: pointer;
+			border: none;
+			min-height: 3rem;
+			height: 3rem;
+			padding-top: 0.5rem;
+			background: transparent;
+			/* font-size: 1.2rem;
+			font-weight: bold; */
+		}
+		.resizer {
+			flex: 1;
+			width: 100%;
+			cursor: col-resize;
+		}
+	}
 	#content {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		padding: 0 0.6rem;
+		padding: 0 1.2rem;
 	
 		.content-header {
 			display: flex;
@@ -263,7 +295,7 @@ x-scrawl {
 				width: 100%;
 				background: transparent;
 				padding: 0;
-				margin-left: 1rem;
+				/* margin-left: 1rem; */
 				font-family: inherit;
 				cursor: text; 
 			}
@@ -276,6 +308,10 @@ x-scrawl {
 			flex: 1;
 			border: none;
 			font-size: 1rem;
+			margin-left: 0;
+		}
+		#editor .ql-editor {
+			padding-left: 0;
 		}
 		.ql-editor pre {
 			background: #f7f7f7;

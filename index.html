@@ -108,14 +108,16 @@ class XScrawl extends HTMLElement {
 			<aside>
 				<div class="sidebar-header">
 					<span>Pages</span>
-					<button id="hideSidebar"><</button>
 				</div>
 				<ul></ul>
 				<button id="newpage">＋</button>
 			</aside>
+			<div id="sidebar-control">
+				<button id="toggleSidebar">⮜</button>
+				<div class="resizer"></div>
+			</div>
 			<div id="content">
 				<div class="content-header">
-					<button id="showSidebar" hidden>☰</button>
 					<input id="pagetitle" type="text">
 				</div>
 				<div id="editor"></div>
@@ -204,15 +206,42 @@ class XScrawl extends HTMLElement {
 	bindEvents() {
 		this.unbindEvents();
 
-		this.querySelector("#hideSidebar").onclick = () => {
-			this.#aside.classList.add("hidden");
-			this.querySelector("#showSidebar").hidden = false;
+		this.querySelector("#toggleSidebar").onclick = (e) => {
+			e.stopPropagation();
+			if (this.#aside.classList.contains("hidden")) {
+				this.#aside.classList.remove("hidden");
+				this.querySelector("#toggleSidebar").textContent = "⮜";
+			} else {
+				this.#aside.classList.add("hidden");
+				this.querySelector("#toggleSidebar").textContent = "⮞";
+			}
 		};
 
-		this.querySelector("#showSidebar").onclick = () => {
-			this.#aside.classList.remove("hidden");
-			this.querySelector("#showSidebar").hidden = true;
+		//todo: move vars to class scope
+		let startX = 0;
+		let startWidth = 0;
+		let isResizing = false;
+		const resizer = this.querySelector("#sidebar-control .resizer");
+		resizer.onmousedown = (e) => {
+			isResizing = true;
+			startX = e.clientX;
+			startWidth = parseInt(window.getComputedStyle(this.#aside).width, 10);
+			document.body.style.userSelect = "none";
 		};
+		this.onmousemove = (e) => {
+			if (!isResizing) return;
+			const newWidth = startWidth + (e.clientX - startX);
+			if (newWidth > 120) {   //todo: define min width
+				this.#aside.style.width = newWidth + "px";
+			}
+		};
+		this.onmouseup = () => {
+			if (isResizing) {
+				isResizing = false;
+				document.body.style.userSelect = "";
+			}
+		};
+		
 
 		this.querySelector("#newpage").onclick = () => {
 			this.createPage("New Page", null);
