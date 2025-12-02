@@ -101,6 +101,11 @@ class XScrawl extends HTMLElement {
 	#notebook = null;
 	#selected = null;
 	#expanded = {};
+	#resizer = null;
+	#isResizing = false;
+	#resizingStartX = 0;
+	#resizingStartWidth = 0;
+	#sidebarMinWidth = 120; //todo: css 
 
 	constructor() {
 		super();
@@ -126,6 +131,8 @@ class XScrawl extends HTMLElement {
 		this.#ul = this.querySelector('ul');
 		this.#pagetitle = this.querySelector('#pagetitle');
 		this.#editor = this.querySelector('#editor');
+		this.#resizer = this.querySelector(".resizer");
+
 		if (!this.#quill) {
             this.#quill = new Quill(this.#editor, {
 				modules: {
@@ -211,33 +218,38 @@ class XScrawl extends HTMLElement {
 			if (this.#aside.classList.contains("hidden")) {
 				this.#aside.classList.remove("hidden");
 				this.querySelector("#toggleSidebar").textContent = "⮜";
+				this.#resizer.classList.remove("sidebar-collapsed");
 			} else {
 				this.#aside.classList.add("hidden");
 				this.querySelector("#toggleSidebar").textContent = "⮞";
+				this.#resizer.classList.add("sidebar-collapsed");
 			}
 		};
-
-		//todo: move vars to class scope
-		let startX = 0;
-		let startWidth = 0;
-		let isResizing = false;
-		const resizer = this.querySelector("#sidebar-control .resizer");
-		resizer.onmousedown = (e) => {
-			isResizing = true;
-			startX = e.clientX;
-			startWidth = parseInt(window.getComputedStyle(this.#aside).width, 10);
+		
+		this.#resizer.onmousedown = (e) => {
+			if (this.#aside.classList.contains("hidden")) {
+				this.#aside.classList.remove("hidden");
+				this.querySelector("#toggleSidebar").textContent = "⮜";
+				this.#resizer.classList.remove("sidebar-collapsed");
+				return;
+			}
+			this.#isResizing = true;
+			this.#resizingStartX = e.clientX;
+			this.#resizingStartWidth = parseInt(window.getComputedStyle(this.#aside).width, 10);
 			document.body.style.userSelect = "none";
 		};
 		this.onmousemove = (e) => {
-			if (!isResizing) return;
-			const newWidth = startWidth + (e.clientX - startX);
-			if (newWidth > 120) {   //todo: define min width
+			if (!this.#isResizing) return;
+			const newWidth = this.#resizingStartWidth + (e.clientX - this.#resizingStartX);
+			if (newWidth > this.#sidebarMinWidth) { 
 				this.#aside.style.width = newWidth + "px";
 			}
 		};
 		this.onmouseup = () => {
-			if (isResizing) {
-				isResizing = false;
+			if (this.#isResizing) {
+				this.#isResizing = false;
+				this.#resizingStartX = 0;
+				this.#resizingStartWidth = 0;
 				document.body.style.userSelect = "";
 			}
 		};
