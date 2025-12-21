@@ -274,11 +274,12 @@ x-scrawl {
 		flex: 1;
 		display: flex;
 		flex-direction: column;
-		padding: 0 1.2rem;
-		overflow-y: auto;
+		padding: 0 2rem;
+		overflow-y: hidden;
     	height: 100%;
 	
 		.content-header {
+			flex: 0 0 auto;
 			display: flex;
 			align-items: center;
 			min-height: 3rem;
@@ -287,17 +288,6 @@ x-scrawl {
 			/*border-bottom: 1px solid #ddd;*/
 			box-sizing: border-box;
 			
-			#showSidebar {
-				font-size: 1rem;
-				font-weight: bold;
-				cursor: pointer;
-				border-radius: 5px;
-				border: 1.5px solid black;
-				background-color: transparent;
-			}
-			#showSidebar:hover {
-				box-shadow: 0 0 0px 1px black;
-			}
 			#pagetitle {
 				font-size: 1.6rem;
 				font-weight: bold;
@@ -316,7 +306,8 @@ x-scrawl {
 			}
 		}
 		#editor {
-			flex: 1;
+			flex: 1 1 auto;
+			overflow-y: auto;
 			border: none;
 			font-size: 1rem;
 			margin-left: 0;
