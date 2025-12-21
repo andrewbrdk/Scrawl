@@ -105,7 +105,9 @@ class XScrawl extends HTMLElement {
 	#isResizing = false;
 	#resizingStartX = 0;
 	#resizingStartWidth = 0;
+	#sidebarDefaultWidth = "15%";
 	#sidebarMinWidth = 120; //todo: css 
+	#collapseEdgeThreshold = 20;
 
 	constructor() {
 		super();
@@ -118,7 +120,6 @@ class XScrawl extends HTMLElement {
 				<button id="newpage">＋</button>
 			</aside>
 			<div id="sidebar-control">
-				<button id="toggleSidebar">⮜</button>
 				<div class="resizer"></div>
 			</div>
 			<div id="content">
@@ -210,27 +211,24 @@ class XScrawl extends HTMLElement {
 		addPageList(this.#notebook.pages, 0);
 	}
 
+	collapseSidebar() {
+		this.#aside.classList.add("hidden");
+		this.#aside.style.width = "0px";
+		this.#resizer.classList.add("sidebar-collapsed");
+	}
+
+	expandSidebar() {
+		this.#aside.classList.remove("hidden");
+		this.#aside.style.width = this.#sidebarDefaultWidth;
+		this.#resizer.classList.remove("sidebar-collapsed");
+	}
+
 	bindEvents() {
 		this.unbindEvents();
 
-		this.querySelector("#toggleSidebar").onclick = (e) => {
-			e.stopPropagation();
-			if (this.#aside.classList.contains("hidden")) {
-				this.#aside.classList.remove("hidden");
-				this.querySelector("#toggleSidebar").textContent = "⮜";
-				this.#resizer.classList.remove("sidebar-collapsed");
-			} else {
-				this.#aside.classList.add("hidden");
-				this.querySelector("#toggleSidebar").textContent = "⮞";
-				this.#resizer.classList.add("sidebar-collapsed");
-			}
-		};
-		
 		this.#resizer.onmousedown = (e) => {
 			if (this.#aside.classList.contains("hidden")) {
-				this.#aside.classList.remove("hidden");
-				this.querySelector("#toggleSidebar").textContent = "⮜";
-				this.#resizer.classList.remove("sidebar-collapsed");
+				this.expandSidebar();
 				return;
 			}
 			this.#isResizing = true;
@@ -240,9 +238,19 @@ class XScrawl extends HTMLElement {
 		};
 		this.onmousemove = (e) => {
 			if (!this.#isResizing) return;
-			const newWidth = this.#resizingStartWidth + (e.clientX - this.#resizingStartX);
-			if (newWidth > this.#sidebarMinWidth) { 
+			const delta = e.clientX - this.#resizingStartX;
+			const newWidth = this.#resizingStartWidth + delta;
+			const nearLeftEdge = e.clientX <= this.#collapseEdgeThreshold;
+			if (newWidth <= this.#sidebarMinWidth && nearLeftEdge) {
+				this.collapseSidebar();
+				this.#isResizing = false;
+				document.body.style.userSelect = "";
+				return;
+			}
+			if (newWidth > this.#sidebarMinWidth) {
 				this.#aside.style.width = newWidth + "px";
+			} else {
+				this.#aside.style.width = this.#sidebarMinWidth + "px";
 			}
 		};
 		this.onmouseup = () => {
