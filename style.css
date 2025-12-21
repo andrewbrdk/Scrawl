@@ -308,6 +308,7 @@ x-scrawl {
 		#editor {
 			flex: 1 1 auto;
 			overflow-y: auto;
+			overflow-x: hidden;
 			border: none;
 			font-size: 1rem;
 			margin-left: 0;
@@ -319,6 +320,10 @@ x-scrawl {
 			background: #f7f7f7;
 			padding: 8px;
 			border-radius: 4px;
+		}
+		#editor .ql-tooltip-arrow {
+			/*todo: fix shifting arrow near borders*/
+			display: none;
 		}
 	}
 }

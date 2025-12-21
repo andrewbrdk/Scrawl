@@ -107,7 +107,7 @@ class XScrawl extends HTMLElement {
 	#resizingStartWidth = 0;
 	#sidebarDefaultWidth = "15%";
 	#sidebarMinWidth = 120; //todo: css 
-	#collapseEdgeThreshold = 20;
+	#collapseEdgeThreshold = 30;
 
 	constructor() {
 		super();
@@ -152,6 +152,8 @@ class XScrawl extends HTMLElement {
 				clearTimeout(saveTimer);
 				saveTimer = setTimeout(() => this.savePage(), 500);
 			});
+			//todo: slows down
+			this.shiftQuillTooltip();
         }
 	}
 
@@ -314,6 +316,27 @@ class XScrawl extends HTMLElement {
 		this.querySelectorAll('button').forEach(btn => btn.onclick = null);
 		this.querySelectorAll("aside li").forEach(li => li.onclick = null);
 	}
+
+	shiftQuillTooltip() {
+		const tooltip = this.#editor.querySelector('.ql-tooltip');
+		//todo: shift arrow position
+		if (!tooltip) return;
+		//todo: slows down 
+		const observer = new MutationObserver(() => {
+			const tooltipRect = tooltip.getBoundingClientRect();
+			const editorRect = this.#editor.getBoundingClientRect();
+			let left = parseFloat(tooltip.style.left || 0);
+			if (tooltipRect.left < editorRect.left) {
+				left += editorRect.left - tooltipRect.left;
+			} 
+			else if (tooltipRect.right > editorRect.right) {
+				left -= tooltipRect.right - editorRect.right;
+			}
+			tooltip.style.left = left + "px";
+		});
+		observer.observe(tooltip, { attributes: true, attributeFilter: ['style'] });
+	}
+
 
 	updateTitle() {
 		this.#pagetitle.value = this.getPageTitleById(this.#selected) ?? "";
