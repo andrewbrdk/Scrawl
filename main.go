@@ -323,6 +323,49 @@ func (S *Scrawl) RenamePage(id int, newTitle string) error {
 	return nil
 }
 
+func (S *Scrawl) RenameNotebook(id int, newName string) error {
+	_, err := S.db.Exec(`
+		UPDATE notebooks
+		SET name = ?, updated = CURRENT_TIMESTAMP
+		WHERE id = ?`, newName, id)
+	if err != nil {
+		errorLog.Printf("Failed to rename notebook id='%d': %v", id, err)
+		return err
+	}
+	S.loadNotebooks()
+	return nil
+}
+
+func (S *Scrawl) DeleteNotebook(id int) error {
+	tx, err := S.db.Begin()
+	if err != nil {
+		errorLog.Printf("Failed to start transaction")
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+	_, err = tx.Exec(`DELETE FROM pages WHERE notebook = ?`, id)
+	if err != nil {
+		errorLog.Printf("Failed to delete pages")
+		return err
+	}
+	_, err = tx.Exec(`DELETE FROM notebooks WHERE id = ?`, id)
+	if err != nil {
+		errorLog.Printf("Failed to delete notebooks")
+		return err
+	}
+	err = tx.Commit()
+	if err != nil {
+		errorLog.Printf("Failed to commit transaction")
+		return err
+	}
+	S.loadNotebooks()
+	return nil
+}
+
 type Response struct {
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
@@ -339,6 +382,8 @@ func httpServer() {
 	http.HandleFunc("/delete", httpDeletePage)
 	http.HandleFunc("/rename", httpRenamePage)
 	http.HandleFunc("/notebooks/create", httpCreateNotebook)
+	http.HandleFunc("/notebooks/rename", httpRenameNotebook)
+	http.HandleFunc("/notebooks/delete", httpDeleteNotebook)
 	log.Fatal(http.ListenAndServe(CONF.port, nil))
 }
 
@@ -525,7 +570,6 @@ func httpDeletePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", 400)
 		return
 	}
-
 	err = SCRAWL.DeletePage(req.Id)
 	if err != nil {
 		http.Error(w, "Error deleting page", 400)
@@ -553,13 +597,11 @@ func httpRenamePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Missing ID or Title", http.StatusBadRequest)
 		return
 	}
-
 	err = SCRAWL.RenamePage(req.Id, req.Title)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
-
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(SCRAWL.notebooks)
 }
@@ -601,4 +643,58 @@ func httpCreateNotebook(w http.ResponseWriter, r *http.Request) {
 		"id":        id,
 		"notebooks": SCRAWL.notebooks,
 	})
+}
+
+func httpRenameNotebook(w http.ResponseWriter, r *http.Request) {
+	err, code, msg := httpCheckAuth(w, r)
+	if err != nil {
+		http.Error(w, msg, code)
+		return
+	}
+	var req struct {
+		Id   int    `json:"id"`
+		Name string `json:"name"`
+	}
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Id == 0 || req.Name == "" {
+		http.Error(w, "Missing id or name", http.StatusBadRequest)
+		return
+	}
+	err = SCRAWL.RenameNotebook(req.Id, req.Name)
+	if err != nil {
+		http.Error(w, "Failed to rename notebook", http.StatusInternalServerError)
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(SCRAWL.notebooks)
+}
+
+func httpDeleteNotebook(w http.ResponseWriter, r *http.Request) {
+	err, code, msg := httpCheckAuth(w, r)
+	if err != nil {
+		http.Error(w, msg, code)
+		return
+	}
+	var req struct {
+		Id int `json:"id"`
+	}
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Id == 0 {
+		http.Error(w, "Missing id", http.StatusBadRequest)
+		return
+	}
+	err = SCRAWL.DeleteNotebook(req.Id)
+	if err != nil {
+		http.Error(w, "Failed to delete notebook", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(SCRAWL.notebooks)
 }

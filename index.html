@@ -164,7 +164,8 @@ class XScrawl extends HTMLElement {
 		this.#notebooks = notebooks;
 		//todo: select last opened notebook and page
 		//todo: check nulls
-		this.#currentNotebookId = Object.keys(notebooks)[0];
+		const ids = Object.keys(notebooks);
+		this.#currentNotebookId = ids.length ? Number(ids[0]) : null;
 		this.#selected = notebooks[this.#currentNotebookId]?.pages.length > 0 ? notebooks[this.#currentNotebookId].pages[0].id : null;
 		await this.render();
 	}
@@ -177,7 +178,15 @@ class XScrawl extends HTMLElement {
 	async render() {
 		this.populateNotebookSelector();
 		this.updatePages();
+		//todo: move to separate method
+		const addBtn = this.querySelector("#newpage");
+		if (this.#currentNotebookId) {
+			addBtn.classList.remove("hidden");
+		} else {
+			addBtn.classList.add("hidden");
+		}
 		this.bindEvents();
+		//todo: handle empty notebooks
 		this.updateTitle();
 		this.updateEditor();
 	}
@@ -190,11 +199,10 @@ class XScrawl extends HTMLElement {
 			opt.selected = Number(id) === this.#currentNotebookId;
 			return opt;
 		});
-		const CREATE_ID = "__create__";
-		const createOpt = document.createElement("option");
-		createOpt.value = CREATE_ID;
-		createOpt.textContent = "＋ Create notebook";
-		this.#nbselect.replaceChildren(...options, createOpt);
+		const createOpt = new Option("＋ Create notebook", "__create__");
+		const renameOpt = new Option("✎ Rename", "__rename__");
+		const deleteOpt = new Option("✕ Delete", "__delete__");
+		this.#nbselect.replaceChildren(...options, createOpt, renameOpt, deleteOpt);
 	}
 
 	async updatePages() {
@@ -255,9 +263,23 @@ class XScrawl extends HTMLElement {
 	bindEvents() {
 		this.unbindEvents();
 
+		this.#nbselect.onclick = async () => {
+			//todo: separate "create notebook" button if no notebooks exist
+			if (!Object.keys(this.#notebooks).length) {
+				this.#nbselect.blur();
+				await this.createNotebook();
+			}
+		};
+
 		this.#nbselect.onchange = async () => {
 			if (this.#nbselect.value === "__create__") {
 				await this.createNotebook();
+				return;
+			} else if (this.#nbselect.value === "__rename__") {
+				await this.renameNotebook();
+				return;
+			} else if (this.#nbselect.value === "__delete__") {
+				await this.deleteNotebook();
 				return;
 			}
 			this.savePage();
@@ -483,6 +505,43 @@ class XScrawl extends HTMLElement {
 		this.#currentNotebookId = data.id;
 		this.#expanded = {};
 		this.#selected = null;
+		this.render();
+	}
+
+	async renameNotebook() {
+		if (!this.#currentNotebookId) return;
+		const oldName = this.#notebooks[this.#currentNotebookId].name;
+		const name = prompt("Rename notebook:", oldName);
+		if (!name || name === oldName) return;
+		const res = await fetch("/notebooks/rename", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ id: this.#currentNotebookId, name: name })
+		});
+		if (!res.ok) return;
+		const data = await res.json();
+		this.#notebooks = data;
+		this.render();
+	}
+
+	async deleteNotebook() {
+		if (!this.#currentNotebookId) return;
+		const name = this.#notebooks[this.#currentNotebookId].name;
+		if (!confirm(`Delete notebook "${name}"?`)) return;
+		const res = await fetch("/notebooks/delete", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ id: this.#currentNotebookId })
+		});
+		if (!res.ok) return;
+		const data = await res.json();
+		this.#notebooks = data;
+		//todo: select last opened notebook
+		this.#currentNotebookId = Object.keys(this.#notebooks)[0]
+			? Number(Object.keys(this.#notebooks)[0])
+			: null;
+		this.#selected = null;
+		this.#expanded = {};
 		this.render();
 	}
 }
