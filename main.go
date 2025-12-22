@@ -28,9 +28,8 @@ var SCRAWL Scrawl
 
 // todo: limit usage of global vars
 type Scrawl struct {
-	db       *sql.DB
-	notebook *Notebook
-	//add config
+	db        *sql.DB
+	notebooks map[int]*Notebook
 }
 
 type Config struct {
@@ -40,8 +39,11 @@ type Config struct {
 }
 
 type Notebook struct {
-	Name  string  `json:"name"`
-	Pages []*Page `json:"pages"`
+	Id      int       `json:"id"`
+	Name    string    `json:"name"`
+	Pages   []*Page   `json:"pages"`
+	Created time.Time `json:"created"`
+	Updated time.Time `json:"updated"`
 }
 
 type Page struct {
@@ -54,7 +56,7 @@ type Page struct {
 func main() {
 	initConfig()
 	SCRAWL.initDB()
-	SCRAWL.loadNotebook()
+	SCRAWL.loadNotebooks()
 	jwtSecretKey = generateRandomKey(32)
 	infoLog = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLog = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
@@ -85,12 +87,21 @@ func (S *Scrawl) initDB() {
 	_, err = S.db.Exec(`
         PRAGMA foreign_keys = ON;
 
+		CREATE TABLE IF NOT EXISTS notebooks (
+			id INTEGER PRIMARY KEY AUTOINCREMENT,
+			name TEXT NOT NULL,
+			created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+		);
+
         CREATE TABLE IF NOT EXISTS pages (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT NOT NULL,
             delta TEXT NOT NULL,
+			notebook INT NOT NULL,
 			created DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    		updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    		updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			FOREIGN KEY(notebook) REFERENCES notebooks(id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS children (
@@ -117,9 +128,34 @@ func generateRandomKey(size int) []byte {
 	return key
 }
 
-func (S *Scrawl) loadNotebook() error {
-	//todo: Notebook method
+func (S *Scrawl) loadNotebooks() error {
+	S.notebooks = make(map[int]*Notebook)
 	rows, err := S.db.Query(`
+		SELECT id, name, created, updated
+		FROM notebooks
+		ORDER BY created ASC`)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var nb Notebook
+		if err := rows.Scan(&nb.Id, &nb.Name, &nb.Created, &nb.Updated); err != nil {
+			return err
+		}
+		//todo: don't pass db
+		err := nb.loadNotebookPages(S.db)
+		if err != nil {
+			return err
+		}
+		S.notebooks[nb.Id] = &nb
+	}
+	return nil
+}
+
+func (nb *Notebook) loadNotebookPages(db *sql.DB) error {
+	rows, err := db.Query(`
         SELECT 
 			p.id, 
 			p.title, 
@@ -127,13 +163,14 @@ func (S *Scrawl) loadNotebook() error {
         FROM pages p
         LEFT JOIN children c
 			ON p.id = c.child_id
-	`)
+		WHERE p.notebook = ?`, nb.Id)
 	if err != nil {
 		errorLog.Printf("loadNotebook error: %v", err)
 		return nil
 	}
 	defer rows.Close()
 
+	//todo: move to client
 	pages := map[int]*Page{}
 	top := []*Page{}
 	children := map[int][]*Page{}
@@ -164,52 +201,26 @@ func (S *Scrawl) loadNotebook() error {
 		parent := pages[pid]
 		parent.Children = append(parent.Children, kids...)
 	}
-	S.notebook = &Notebook{
-		Name:  "Notebook",
-		Pages: top,
-	}
+	nb.Pages = top
 	return nil
 }
 
-func (nb *Notebook) FindPage(id int) *Page {
-	for i := range nb.Pages {
-		p := nb.Pages[i].FindPage(id)
-		if p != nil {
-			return p
-		}
-	}
-	return nil
-}
-
-func (p *Page) FindPage(id int) *Page {
-	if p.Id == id {
-		return p
-	}
-	for i := range p.Children {
-		child := p.Children[i].FindPage(id)
-		if child != nil {
-			return child
-		}
-	}
-	return nil
-}
-
-func (p *Page) ReadPage() json.RawMessage {
+func (S *Scrawl) ReadPage(id int) json.RawMessage {
 	var delta string
-	infoLog.Printf("Reading page '%s' (id='%d')", p.Title, p.Id)
-	err := SCRAWL.db.QueryRow("SELECT delta FROM pages WHERE id=?", p.Id).Scan(&delta)
+	infoLog.Printf("Reading page id='%d'", id)
+	err := SCRAWL.db.QueryRow("SELECT delta FROM pages WHERE id=?", id).Scan(&delta)
 	if err != nil {
-		errorLog.Printf("Can't read page '%s' (id='%d'): %s", p.Title, p.Id, err)
+		errorLog.Printf("Can't read page id='%d': %s", id, err)
 		return nil
 	}
 	return json.RawMessage(delta)
 }
 
-func (nb *Notebook) CreatePage(title string, parentID int) (int, error) {
+func (S *Scrawl) CreatePage(title string, notebookId int, parentID int) (int, error) {
 	//todo: merge with SavePage
 	delta := `{"ops":[{"insert":"\n"}]}`
 	infoLog.Printf("Creating page '%s'", title)
-	tx, err := SCRAWL.db.Begin()
+	tx, err := S.db.Begin()
 	if err != nil {
 		errorLog.Printf("Failed to begin transaction: %v", err)
 		return 0, err
@@ -220,9 +231,9 @@ func (nb *Notebook) CreatePage(title string, parentID int) (int, error) {
 		}
 	}()
 	res, err := tx.Exec(`
-        INSERT INTO pages(title, delta, created, updated)
-        VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-    `, title, delta)
+        INSERT INTO pages(title, delta, notebook)
+        VALUES (?, ?, ?)
+    `, title, delta, notebookId)
 	if err != nil {
 		errorLog.Printf("Failed to insert page: %v", err)
 		return 0, err
@@ -245,35 +256,26 @@ func (nb *Notebook) CreatePage(title string, parentID int) (int, error) {
 		errorLog.Printf("Commit failed: %v", err)
 		return 0, err
 	}
-	SCRAWL.loadNotebook()
+	S.loadNotebooks()
 	return int(newId), nil
 }
 
-func (nb *Notebook) SavePage(p *Page, delta string) error {
-	err := p.Save(delta)
+func (S *Scrawl) SavePageContent(id int, delta string) error {
+	//todo: merge with CreatePage, upsert
+	_, err := S.db.Exec(`
+		UPDATE pages
+        SET delta = ?, updated = CURRENT_TIMESTAMP
+        WHERE id = ?
+	`, delta, id)
 	if err != nil {
-		return err
+		errorLog.Printf("Failed to save page '%d': %v", id, err)
 	}
-	SCRAWL.loadNotebook()
+	S.loadNotebooks()
 	return nil
 }
 
-func (p *Page) Save(delta string) error {
-	//todo: merge with CreatePage
-	//todo: upsert?
-	_, err := SCRAWL.db.Exec(`
-		UPDATE pages
-        SET title = ?, delta = ?, updated = CURRENT_TIMESTAMP
-        WHERE id = ?
-	`, p.Title, delta, p.Id)
-	if err != nil {
-		errorLog.Printf("Failed to save page '%d': %v", p.Id, err)
-	}
-	return err
-}
-
-func (nb *Notebook) DeletePage(id int) error {
-	tx, err := SCRAWL.db.Begin()
+func (S *Scrawl) DeletePage(id int) error {
+	tx, err := S.db.Begin()
 	if err != nil {
 		return err
 	}
@@ -303,12 +305,12 @@ func (nb *Notebook) DeletePage(id int) error {
 		errorLog.Printf("Commit failed during delete: %v", err)
 		return err
 	}
-	SCRAWL.loadNotebook()
+	S.loadNotebooks()
 	return nil
 }
 
-func (nb *Notebook) RenamePage(id int, newTitle string) error {
-	_, err := SCRAWL.db.Exec(`
+func (S *Scrawl) RenamePage(id int, newTitle string) error {
+	_, err := S.db.Exec(`
         UPDATE pages
         SET title = ?, updated = CURRENT_TIMESTAMP
         WHERE id = ?
@@ -317,7 +319,7 @@ func (nb *Notebook) RenamePage(id int, newTitle string) error {
 		errorLog.Printf("Failed to rename page id='%d': %v", id, err)
 		return err
 	}
-	SCRAWL.loadNotebook()
+	S.loadNotebooks()
 	return nil
 }
 
@@ -336,6 +338,7 @@ func httpServer() {
 	http.HandleFunc("/create", httpCreatePage)
 	http.HandleFunc("/delete", httpDeletePage)
 	http.HandleFunc("/rename", httpRenamePage)
+	http.HandleFunc("/notebooks/create", httpCreateNotebook)
 	log.Fatal(http.ListenAndServe(CONF.port, nil))
 }
 
@@ -415,7 +418,7 @@ func httpPages(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(SCRAWL.notebook)
+	json.NewEncoder(w).Encode(SCRAWL.notebooks)
 }
 
 func httpPage(w http.ResponseWriter, r *http.Request) {
@@ -430,21 +433,14 @@ func httpPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid id", http.StatusBadRequest)
 		return
 	}
-	page := SCRAWL.notebook.FindPage(id)
-	if page == nil {
-		errorLog.Printf("Page with id=%d not found", id)
-		http.Error(w, "Page not found", 404)
-		return
-	}
-	delta := page.ReadPage()
+	delta := SCRAWL.ReadPage(id)
 	if delta == nil {
 		http.Error(w, "Can't read page", 500)
 		return
 	}
 	resp := struct {
-		Title string          `json:"title"`
 		Delta json.RawMessage `json:"delta"`
-	}{Title: page.Title, Delta: delta}
+	}{Delta: delta}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -467,12 +463,7 @@ func httpSavePage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
 		return
 	}
-	page := SCRAWL.notebook.FindPage(req.Id)
-	if page == nil {
-		http.Error(w, "Page not found", http.StatusNotFound)
-		return
-	}
-	err = SCRAWL.notebook.SavePage(page, string(req.Delta))
+	err = SCRAWL.SavePageContent(req.Id, string(req.Delta))
 	if err != nil {
 		http.Error(w, "Failed to save page", http.StatusInternalServerError)
 		return
@@ -492,8 +483,9 @@ func httpCreatePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var req struct {
-		Title  string `json:"title"`
-		Parent int    `json:"parent"`
+		Title    string `json:"title"`
+		Notebook int    `json:"notebook"`
+		Parent   int    `json:"parent"`
 	}
 	err = json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -501,16 +493,16 @@ func httpCreatePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	newId, err := SCRAWL.notebook.CreatePage(req.Title, req.Parent)
+	newPageId, err := SCRAWL.CreatePage(req.Title, req.Notebook, req.Parent)
 	if err != nil {
 		http.Error(w, err.Error(), 404)
 		return
 	}
 
 	resp := struct {
-		Nb    Notebook `json:"notebook"`
-		NewId int      `json:"id"`
-	}{Nb: *SCRAWL.notebook, NewId: newId}
+		Notebooks map[int]*Notebook `json:"notebooks"`
+		NewPageId int               `json:"id"`
+	}{Notebooks: SCRAWL.notebooks, NewPageId: newPageId}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(resp)
 }
@@ -534,13 +526,13 @@ func httpDeletePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = SCRAWL.notebook.DeletePage(req.Id)
+	err = SCRAWL.DeletePage(req.Id)
 	if err != nil {
 		http.Error(w, "Error deleting page", 400)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(SCRAWL.notebook)
+	json.NewEncoder(w).Encode(SCRAWL.notebooks)
 }
 
 func httpRenamePage(w http.ResponseWriter, r *http.Request) {
@@ -562,12 +554,51 @@ func httpRenamePage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = SCRAWL.notebook.RenamePage(req.Id, req.Title)
+	err = SCRAWL.RenamePage(req.Id, req.Title)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(SCRAWL.notebook)
+	json.NewEncoder(w).Encode(SCRAWL.notebooks)
+}
+
+func httpCreateNotebook(w http.ResponseWriter, r *http.Request) {
+	err, code, msg := httpCheckAuth(w, r)
+	if err != nil {
+		http.Error(w, msg, code)
+		return
+	}
+	const name = "New Notebook"
+	res, err := SCRAWL.db.Exec(
+		`INSERT INTO notebooks (name) VALUES (?)`,
+		name,
+	)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	id64, _ := res.LastInsertId()
+	id := int(id64)
+
+	var created, updated time.Time
+	err = SCRAWL.db.QueryRow(`SELECT created, updated FROM notebooks WHERE id=?`, id).Scan(&created, &updated)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	nb := &Notebook{
+		Id:      id,
+		Name:    name,
+		Pages:   []*Page{},
+		Created: created,
+		Updated: updated,
+	}
+	SCRAWL.notebooks[id] = nb
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"id":        id,
+		"notebooks": SCRAWL.notebooks,
+	})
 }

@@ -94,11 +94,13 @@ class XLogin extends HTMLElement {
 
 class XScrawl extends HTMLElement {
 	#aside = null;
+	#nbselect = null;
 	#ul = null;
 	#pagetitle = null;
 	#editor = null;
 	#quill = null;
-	#notebook = null;
+	#notebooks = {};
+	#currentNotebookId = null;
 	#selected = null;
 	#expanded = {};
 	#resizer = null;
@@ -114,7 +116,7 @@ class XScrawl extends HTMLElement {
 		this.innerHTML = `
 			<aside>
 				<div class="sidebar-header">
-					<span>Pages</span>
+					<select id="nbselect"></select>
 				</div>
 				<ul></ul>
 				<button id="newpage">＋</button>
@@ -129,6 +131,7 @@ class XScrawl extends HTMLElement {
 				<div id="editor"></div>
 			</div>`;
 		this.#aside = this.querySelector('aside');
+		this.#nbselect = this.querySelector('#nbselect');
 		this.#ul = this.querySelector('ul');
 		this.#pagetitle = this.querySelector('#pagetitle');
 		this.#editor = this.querySelector('#editor');
@@ -157,23 +160,47 @@ class XScrawl extends HTMLElement {
         }
 	}
 
-	async init(p) {
-		this.#notebook = p;
-		//todo: this.#selected = last_open
-		this.#selected = p.pages.length > 0 ? p.pages[0].id : null;
+	async init(notebooks) {
+		this.#notebooks = notebooks;
+		//todo: select last opened notebook and page
+		//todo: check nulls
+		this.#currentNotebookId = Object.keys(notebooks)[0];
+		this.#selected = notebooks[this.#currentNotebookId]?.pages.length > 0 ? notebooks[this.#currentNotebookId].pages[0].id : null;
 		await this.render();
 	}
 
+	getCurrentNotebook() {
+		//todo: this.#currentNotebookId
+		return this.#notebooks?.[this.#currentNotebookId] ?? null;
+	}
+
 	async render() {
+		this.populateNotebookSelector();
 		this.updatePages();
 		this.bindEvents();
 		this.updateTitle();
 		this.updateEditor();
 	}
 
+	populateNotebookSelector() {
+		const options = Object.entries(this.#notebooks).map(([id, nb]) => {
+			const opt = document.createElement("option");
+			opt.value = id;
+			opt.textContent = nb.name;
+			opt.selected = Number(id) === this.#currentNotebookId;
+			return opt;
+		});
+		const CREATE_ID = "__create__";
+		const createOpt = document.createElement("option");
+		createOpt.value = CREATE_ID;
+		createOpt.textContent = "＋ Create notebook";
+		this.#nbselect.replaceChildren(...options, createOpt);
+	}
+
 	async updatePages() {
+		const currentNotebook = this.getCurrentNotebook();
+		if (!currentNotebook) return;
 		this.#ul.innerHTML = "";
-		if (!this.#notebook) return;
 		const addPageList = (pages, depth=0) => {
 			pages.forEach(page => {
 				const li = document.createElement("li");
@@ -210,7 +237,7 @@ class XScrawl extends HTMLElement {
 				}
 			});
 		};
-		addPageList(this.#notebook.pages, 0);
+		addPageList(currentNotebook.pages, 0);
 	}
 
 	collapseSidebar() {
@@ -227,6 +254,20 @@ class XScrawl extends HTMLElement {
 
 	bindEvents() {
 		this.unbindEvents();
+
+		this.#nbselect.onchange = async () => {
+			if (this.#nbselect.value === "__create__") {
+				await this.createNotebook();
+				return;
+			}
+			this.savePage();
+			const selId = parseInt(this.#nbselect.value, 10);
+			if (this.#currentNotebookId === selId) return;
+			this.#currentNotebookId = selId;
+			this.#expanded = {};
+			this.#selected = this.getCurrentNotebook()?.pages?.[0]?.id ?? null;
+			this.render();
+		};
 
 		this.#resizer.onmousedown = (e) => {
 			if (this.#aside.classList.contains("hidden")) {
@@ -264,9 +305,8 @@ class XScrawl extends HTMLElement {
 			}
 		};
 		
-
 		this.querySelector("#newpage").onclick = () => {
-			this.createPage("New Page", null);
+			this.createPage("New Page", this.#currentNotebookId, null);
 		};
 
 		this.querySelectorAll("aside li").forEach(li => {
@@ -290,7 +330,7 @@ class XScrawl extends HTMLElement {
 			};
 			li.querySelector(".addchild").onclick = (e) => {
 				e.stopPropagation();
-				this.createPage("New Page", id);
+				this.createPage("New Page", this.#currentNotebookId, id);
 			};
 			li.querySelector(".collapse").onclick = (e) => {
 				e.stopPropagation();
@@ -337,14 +377,13 @@ class XScrawl extends HTMLElement {
 		observer.observe(tooltip, { attributes: true, attributeFilter: ['style'] });
 	}
 
-
 	updateTitle() {
 		this.#pagetitle.value = this.getPageTitleById(this.#selected) ?? "";
 	}
 
 	getPageTitleById(id, pages=null) {
 		if (!id) return null;
-		if (pages === null) pages = this.#notebook.pages;
+		if (pages === null) pages = this.getCurrentNotebook()?.pages;
 		for (const page of pages) {
 			if (page.id === id) return page.title;
 			if (page.children && page.children.length > 0) {
@@ -379,11 +418,11 @@ class XScrawl extends HTMLElement {
 		}
 	}
 
-	async createPage(title, parentId) {
+	async createPage(title, notebookId, parentId) {
 		const res = await fetch('/create', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ title: title, parent: parentId || 0 })
+			body: JSON.stringify({ title: title, notebook: notebookId || 1, parent: parentId || 0 })
 		});
 		if (!res.ok) {
 			console.error("Failed to create page");
@@ -391,7 +430,7 @@ class XScrawl extends HTMLElement {
 		}
 		const data = await res.json();
 		if (parentId) this.#expanded[parentId] = true;
-		this.#notebook = data.notebook;
+		this.#notebooks = data.notebooks;
 		this.#selected = data.id;
 		await this.render();
 	}
@@ -408,7 +447,7 @@ class XScrawl extends HTMLElement {
 			return;
 		}
 		const data = await res.json();
-		this.#notebook = data;
+		this.#notebooks = data;
 		this.#selected = null;
 		await this.render();
 	}
@@ -429,7 +468,21 @@ class XScrawl extends HTMLElement {
 			return;
 		}
 		const data = await res.json();
-		this.#notebook = data;
+		this.#notebooks = data;
+		this.render();
+	}
+
+	async createNotebook() {
+		const res = await fetch("/notebooks/create", { method: "POST" });
+		if (!res.ok) {
+			alert("Failed to create notebook");
+			return;
+		}
+		const data = await res.json();
+		this.#notebooks = data.notebooks;
+		this.#currentNotebookId = data.id;
+		this.#expanded = {};
+		this.#selected = null;
 		this.render();
 	}
 }
