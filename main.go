@@ -55,12 +55,11 @@ type Page struct {
 
 func main() {
 	initConfig()
-	SCRAWL.initDB()
-	SCRAWL.loadNotebooks()
 	jwtSecretKey = generateRandomKey(32)
 	infoLog = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLog = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
-	//todo: load notebooks, store in memory
+	SCRAWL.initDB()
+	SCRAWL.loadNotebooks()
 	httpServer()
 }
 
@@ -135,7 +134,8 @@ func (S *Scrawl) loadNotebooks() error {
 		FROM notebooks
 		ORDER BY created ASC`)
 	if err != nil {
-		return err
+		//todo: don't exit
+		log.Fatalf("Failed to load notebooks: %v", err)
 	}
 	defer rows.Close()
 
@@ -147,7 +147,8 @@ func (S *Scrawl) loadNotebooks() error {
 		//todo: don't pass db
 		err := nb.loadNotebookPages(S.db)
 		if err != nil {
-			return err
+			//todo: don't exit
+			log.Fatalf("Failed to load notebooks: %v", err)
 		}
 		S.notebooks[nb.Id] = &nb
 	}
