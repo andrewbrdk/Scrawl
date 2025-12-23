@@ -157,6 +157,9 @@ x-scrawl {
 		#nbmenu li.action {
 			font-weight: normal;
 		}
+		#nbmenu li:hover {
+			scale: 1.05;
+		}
 		#nbselect.single #nbarrow {
 			display: none;
 		}
