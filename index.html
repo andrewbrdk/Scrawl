@@ -95,7 +95,9 @@ class XLogin extends HTMLElement {
 class XScrawl extends HTMLElement {
 	#aside = null;
 	#nbselect = null;
-	#ul = null;
+	#nblabel = null;
+	#nbmenu = null;
+	#ulpages = null;
 	#pagetitle = null;
 	#editor = null;
 	#quill = null;
@@ -115,10 +117,14 @@ class XScrawl extends HTMLElement {
 		super();
 		this.innerHTML = `
 			<aside>
-				<div class="sidebar-header">
-					<select id="nbselect"></select>
+				<div id="nbselect">
+					<div id="nbcurrent">
+						<span id="nblabel"></span>
+						<span id="nbarrow">▾</span>
+					</div>
+					<ul id="nbmenu" class="hidden"></ul>
 				</div>
-				<ul></ul>
+				<ul id="pages"></ul>
 				<button id="newpage">＋</button>
 			</aside>
 			<div id="sidebar-control">
@@ -132,7 +138,9 @@ class XScrawl extends HTMLElement {
 			</div>`;
 		this.#aside = this.querySelector('aside');
 		this.#nbselect = this.querySelector('#nbselect');
-		this.#ul = this.querySelector('ul');
+		this.#nblabel = this.querySelector('#nblabel');
+		this.#nbmenu = this.querySelector('#nbmenu');
+		this.#ulpages = this.querySelector('#pages');
 		this.#pagetitle = this.querySelector('#pagetitle');
 		this.#editor = this.querySelector('#editor');
 		this.#resizer = this.querySelector(".resizer");
@@ -163,7 +171,6 @@ class XScrawl extends HTMLElement {
 	async init(notebooks) {
 		this.#notebooks = notebooks;
 		//todo: select last opened notebook and page
-		//todo: check nulls
 		const ids = Object.keys(notebooks);
 		this.#currentNotebookId = ids.length ? Number(ids[0]) : null;
 		this.#selected = notebooks[this.#currentNotebookId]?.pages.length > 0 ? notebooks[this.#currentNotebookId].pages[0].id : null;
@@ -171,7 +178,6 @@ class XScrawl extends HTMLElement {
 	}
 
 	getCurrentNotebook() {
-		//todo: this.#currentNotebookId
 		return this.#notebooks?.[this.#currentNotebookId] ?? null;
 	}
 
@@ -192,23 +198,49 @@ class XScrawl extends HTMLElement {
 	}
 
 	populateNotebookSelector() {
-		const options = Object.entries(this.#notebooks).map(([id, nb]) => {
-			const opt = document.createElement("option");
-			opt.value = id;
-			opt.textContent = nb.name;
-			opt.selected = Number(id) === this.#currentNotebookId;
-			return opt;
-		});
-		const createOpt = new Option("＋ Create notebook", "__create__");
-		const renameOpt = new Option("✎ Rename", "__rename__");
-		const deleteOpt = new Option("✕ Delete", "__delete__");
-		this.#nbselect.replaceChildren(...options, createOpt, renameOpt, deleteOpt);
+		const entries = Object.entries(this.#notebooks);
+		if (!entries.length) {
+			this.#nblabel.textContent = "Create notebook";
+			this.#nbmenu.replaceChildren();
+			this.#nbmenu.classList.add("hidden");
+			this.#nbselect.classList.add("single");
+			return;
+		}
+
+		this.#nbselect.classList.remove("single");
+		this.#nbmenu.replaceChildren();
+		for (const [id, nb] of entries) {
+			const li = document.createElement("li");
+			li.textContent = nb.name;
+			li.dataset.id = id;
+			if (Number(id) === this.#currentNotebookId) {
+				this.#nblabel.textContent = nb.name;
+			}
+			this.#nbmenu.appendChild(li);
+		}
+
+		const separator = document.createElement("li");
+		separator.classList.add("separator");
+		this.#nbmenu.appendChild(separator);
+
+		const actions = [
+			{ text: "Create notebook", action: "create" },
+			{ text: "Rename", action: "rename" },
+			{ text: "Delete", action: "delete" },
+		];
+		for (const a of actions) {
+			const li = document.createElement("li");
+			li.textContent = a.text;
+			li.dataset.action = a.action;
+			li.classList.add("action")
+			this.#nbmenu.appendChild(li);
+		}
 	}
 
 	async updatePages() {
 		const currentNotebook = this.getCurrentNotebook();
 		if (!currentNotebook) return;
-		this.#ul.innerHTML = "";
+		this.#ulpages.innerHTML = "";
 		const addPageList = (pages, depth=0) => {
 			pages.forEach(page => {
 				const li = document.createElement("li");
@@ -239,7 +271,7 @@ class XScrawl extends HTMLElement {
 				const wrapper = li.firstElementChild;
         		wrapper.style.setProperty('--depth', String(depth));
 
-				this.#ul.appendChild(li);
+				this.#ulpages.appendChild(li);
 				if (hasChildren && expanded) {
 					addPageList(page.children, depth+1);
 				}
@@ -263,33 +295,42 @@ class XScrawl extends HTMLElement {
 	bindEvents() {
 		this.unbindEvents();
 
-		this.#nbselect.onclick = async () => {
-			//todo: separate "create notebook" button if no notebooks exist
-			if (!Object.keys(this.#notebooks).length) {
-				this.#nbselect.blur();
+		this.querySelector("#nbcurrent").onclick = async (e) => {
+			e.stopPropagation();
+			if (this.#nbselect.classList.contains("single")) {
 				await this.createNotebook();
+				return;
 			}
+			this.#nbmenu.classList.toggle("hidden");
 		};
 
-		this.#nbselect.onchange = async () => {
-			if (this.#nbselect.value === "__create__") {
-				await this.createNotebook();
-				return;
-			} else if (this.#nbselect.value === "__rename__") {
-				await this.renameNotebook();
-				return;
-			} else if (this.#nbselect.value === "__delete__") {
-				await this.deleteNotebook();
+		this.#nbmenu.onclick = async (e) => {
+			const li = e.target.closest("li");
+			if (!li) return;
+			this.#nbmenu.classList.add("hidden");
+
+			if (li.dataset.id) {
+				const id = Number(li.dataset.id);
+				if (id === this.#currentNotebookId) return;
+				this.savePage();
+				this.#currentNotebookId = id;
+				this.#expanded = {};
+				this.#selected = this.getCurrentNotebook()?.pages?.[0]?.id ?? null;
+				this.render();
 				return;
 			}
-			this.savePage();
-			const selId = parseInt(this.#nbselect.value, 10);
-			if (this.#currentNotebookId === selId) return;
-			this.#currentNotebookId = selId;
-			this.#expanded = {};
-			this.#selected = this.getCurrentNotebook()?.pages?.[0]?.id ?? null;
-			this.render();
+			if (li.dataset.action == "create") {
+				await this.createNotebook();
+			} else if (li.dataset.action == "rename") {
+				await this.renameNotebook();
+			} else if (li.dataset.action == "delete") {
+				await this.deleteNotebook();
+			}
 		};
+		document.onclick = () => {
+			this.#nbmenu.classList.add("hidden");
+		};
+
 
 		this.#resizer.onmousedown = (e) => {
 			if (this.#aside.classList.contains("hidden")) {
@@ -331,7 +372,7 @@ class XScrawl extends HTMLElement {
 			this.createPage("New Page", this.#currentNotebookId, null);
 		};
 
-		this.querySelectorAll("aside li").forEach(li => {
+		this.querySelectorAll("#pages li").forEach(li => {
 			//todo: avoid string-int conversion
 			const id = parseInt(li.dataset.id, 10);
         	li.onclick = () => {
