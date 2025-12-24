@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"embed"
 	"encoding/json"
+	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -74,6 +75,13 @@ func initConfig() {
 
 func (S *Scrawl) initDB() {
 	var err error
+
+	firstRun := false
+	_, err = os.Stat(CONF.dbFile)
+	if errors.Is(err, os.ErrNotExist) {
+		firstRun = true
+	}
+
 	S.db, err = sql.Open("sqlite3", CONF.dbFile)
 	if err != nil {
 		log.Fatalf("cannot open sqlite db: %v", err)
@@ -101,6 +109,18 @@ func (S *Scrawl) initDB() {
 
 	if err != nil {
 		log.Fatalf("Can't create tables: %v", err)
+	}
+
+	if firstRun {
+		infoLog.Println("Database created")
+		delta := `{"ops":[{"insert": "Welcome to Scrawl!\n"}]}`
+		title := "Welcome"
+		_, err := S.db.Exec(`
+			INSERT INTO pages (title, delta)
+			VALUES (?, ?)`, title, delta)
+		if err != nil {
+			errorLog.Printf("failed to create welcome page: %v", err)
+		}
 	}
 }
 
