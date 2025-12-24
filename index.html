@@ -94,15 +94,11 @@ class XLogin extends HTMLElement {
 
 class XScrawl extends HTMLElement {
 	#aside = null;
-	#nbselect = null;
-	#nblabel = null;
-	#nbmenu = null;
 	#ulpages = null;
 	#pagetitle = null;
 	#editor = null;
 	#quill = null;
-	#notebooks = {};
-	#currentNotebookId = null;
+	#notebook = null;
 	#selected = null;
 	#expanded = {};
 	#resizer = null;
@@ -117,12 +113,8 @@ class XScrawl extends HTMLElement {
 		super();
 		this.innerHTML = `
 			<aside>
-				<div id="nbselect">
-					<div id="nbcurrent">
-						<span id="nblabel"></span>
-						<span id="nbarrow">▾</span>
-					</div>
-					<ul id="nbmenu" class="hidden"></ul>
+				<div id="sidebar-header">
+					<span id="sidebar-label">Pages</span>
 				</div>
 				<ul id="pages"></ul>
 				<button id="newpage">＋</button>
@@ -137,9 +129,6 @@ class XScrawl extends HTMLElement {
 				<div id="editor"></div>
 			</div>`;
 		this.#aside = this.querySelector('aside');
-		this.#nbselect = this.querySelector('#nbselect');
-		this.#nblabel = this.querySelector('#nblabel');
-		this.#nbmenu = this.querySelector('#nbmenu');
 		this.#ulpages = this.querySelector('#pages');
 		this.#pagetitle = this.querySelector('#pagetitle');
 		this.#editor = this.querySelector('#editor');
@@ -168,78 +157,23 @@ class XScrawl extends HTMLElement {
         }
 	}
 
-	async init(notebooks) {
-		this.#notebooks = notebooks;
-		//todo: select last opened notebook and page
-		const ids = Object.keys(notebooks);
-		this.#currentNotebookId = ids.length ? Number(ids[0]) : null;
-		this.#selected = notebooks[this.#currentNotebookId]?.pages.length > 0 ? notebooks[this.#currentNotebookId].pages[0].id : null;
+	async init(notebook) {
+		this.#notebook = notebook;
+		//todo: select last opened page
+		this.#selected = this.#notebook?.pages.length > 0 ? this.#notebook.pages[0].id : null;
 		await this.render();
 	}
 
-	getCurrentNotebook() {
-		return this.#notebooks?.[this.#currentNotebookId] ?? null;
-	}
-
 	async render() {
-		this.populateNotebookSelector();
 		this.updatePages();
-		//todo: move to separate method
-		const addBtn = this.querySelector("#newpage");
-		if (this.#currentNotebookId) {
-			addBtn.classList.remove("hidden");
-		} else {
-			addBtn.classList.add("hidden");
-		}
 		this.bindEvents();
-		//todo: handle empty notebooks
+		//todo: handle empty notebook
 		this.updateTitle();
 		this.updateEditor();
 	}
 
-	populateNotebookSelector() {
-		const entries = Object.entries(this.#notebooks);
-		if (!entries.length) {
-			this.#nblabel.textContent = "Create notebook";
-			this.#nbmenu.replaceChildren();
-			this.#nbmenu.classList.add("hidden");
-			this.#nbselect.classList.add("single");
-			return;
-		}
-
-		this.#nbselect.classList.remove("single");
-		this.#nbmenu.replaceChildren();
-		for (const [id, nb] of entries) {
-			const li = document.createElement("li");
-			li.textContent = nb.name;
-			li.dataset.id = id;
-			if (Number(id) === this.#currentNotebookId) {
-				this.#nblabel.textContent = nb.name;
-			}
-			this.#nbmenu.appendChild(li);
-		}
-
-		const separator = document.createElement("li");
-		separator.classList.add("separator");
-		this.#nbmenu.appendChild(separator);
-
-		const actions = [
-			{ text: "Create notebook", action: "create" },
-			{ text: "Rename", action: "rename" },
-			{ text: "Delete", action: "delete" },
-		];
-		for (const a of actions) {
-			const li = document.createElement("li");
-			li.textContent = a.text;
-			li.dataset.action = a.action;
-			li.classList.add("action")
-			this.#nbmenu.appendChild(li);
-		}
-	}
-
 	async updatePages() {
-		const currentNotebook = this.getCurrentNotebook();
-		if (!currentNotebook) return;
+		if (!this.#notebook) return;
 		this.#ulpages.innerHTML = "";
 		const addPageList = (pages, depth=0) => {
 			pages.forEach(page => {
@@ -277,7 +211,7 @@ class XScrawl extends HTMLElement {
 				}
 			});
 		};
-		addPageList(currentNotebook.pages, 0);
+		addPageList(this.#notebook.pages, 0);
 	}
 
 	collapseSidebar() {
@@ -294,43 +228,6 @@ class XScrawl extends HTMLElement {
 
 	bindEvents() {
 		this.unbindEvents();
-
-		this.querySelector("#nbcurrent").onclick = async (e) => {
-			e.stopPropagation();
-			if (this.#nbselect.classList.contains("single")) {
-				await this.createNotebook();
-				return;
-			}
-			this.#nbmenu.classList.toggle("hidden");
-		};
-
-		this.#nbmenu.onclick = async (e) => {
-			const li = e.target.closest("li");
-			if (!li) return;
-			this.#nbmenu.classList.add("hidden");
-
-			if (li.dataset.id) {
-				const id = Number(li.dataset.id);
-				if (id === this.#currentNotebookId) return;
-				this.savePage();
-				this.#currentNotebookId = id;
-				this.#expanded = {};
-				this.#selected = this.getCurrentNotebook()?.pages?.[0]?.id ?? null;
-				this.render();
-				return;
-			}
-			if (li.dataset.action == "create") {
-				await this.createNotebook();
-			} else if (li.dataset.action == "rename") {
-				await this.renameNotebook();
-			} else if (li.dataset.action == "delete") {
-				await this.deleteNotebook();
-			}
-		};
-		document.onclick = () => {
-			this.#nbmenu.classList.add("hidden");
-		};
-
 
 		this.#resizer.onmousedown = (e) => {
 			if (this.#aside.classList.contains("hidden")) {
@@ -369,7 +266,7 @@ class XScrawl extends HTMLElement {
 		};
 		
 		this.querySelector("#newpage").onclick = () => {
-			this.createPage("New Page", this.#currentNotebookId, null);
+			this.createPage("New Page", null);
 		};
 
 		this.querySelectorAll("#pages li").forEach(li => {
@@ -393,7 +290,7 @@ class XScrawl extends HTMLElement {
 			};
 			li.querySelector(".addchild").onclick = (e) => {
 				e.stopPropagation();
-				this.createPage("New Page", this.#currentNotebookId, id);
+				this.createPage("New Page", id);
 			};
 			li.querySelector(".collapse").onclick = (e) => {
 				e.stopPropagation();
@@ -446,7 +343,7 @@ class XScrawl extends HTMLElement {
 
 	getPageTitleById(id, pages=null) {
 		if (!id) return null;
-		if (pages === null) pages = this.getCurrentNotebook()?.pages;
+		if (pages === null) pages = this.#notebook.pages;
 		for (const page of pages) {
 			if (page.id === id) return page.title;
 			if (page.children && page.children.length > 0) {
@@ -481,11 +378,11 @@ class XScrawl extends HTMLElement {
 		}
 	}
 
-	async createPage(title, notebookId, parentId) {
+	async createPage(title, parentId) {
 		const res = await fetch('/create', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ title: title, notebook: notebookId || 1, parent: parentId || 0 })
+			body: JSON.stringify({ title: title, parent: parentId || 0 })
 		});
 		if (!res.ok) {
 			console.error("Failed to create page");
@@ -493,7 +390,7 @@ class XScrawl extends HTMLElement {
 		}
 		const data = await res.json();
 		if (parentId) this.#expanded[parentId] = true;
-		this.#notebooks = data.notebooks;
+		this.#notebook = data.notebook;
 		this.#selected = data.id;
 		await this.render();
 	}
@@ -510,7 +407,7 @@ class XScrawl extends HTMLElement {
 			return;
 		}
 		const data = await res.json();
-		this.#notebooks = data;
+		this.#notebook = data;
 		this.#selected = null;
 		await this.render();
 	}
@@ -531,58 +428,7 @@ class XScrawl extends HTMLElement {
 			return;
 		}
 		const data = await res.json();
-		this.#notebooks = data;
-		this.render();
-	}
-
-	async createNotebook() {
-		const res = await fetch("/notebooks/create", { method: "POST" });
-		if (!res.ok) {
-			alert("Failed to create notebook");
-			return;
-		}
-		const data = await res.json();
-		this.#notebooks = data.notebooks;
-		this.#currentNotebookId = data.id;
-		this.#expanded = {};
-		this.#selected = null;
-		this.render();
-	}
-
-	async renameNotebook() {
-		if (!this.#currentNotebookId) return;
-		const oldName = this.#notebooks[this.#currentNotebookId].name;
-		const name = prompt("Rename notebook:", oldName);
-		if (!name || name === oldName) return;
-		const res = await fetch("/notebooks/rename", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ id: this.#currentNotebookId, name: name })
-		});
-		if (!res.ok) return;
-		const data = await res.json();
-		this.#notebooks = data;
-		this.render();
-	}
-
-	async deleteNotebook() {
-		if (!this.#currentNotebookId) return;
-		const name = this.#notebooks[this.#currentNotebookId].name;
-		if (!confirm(`Delete notebook "${name}"?`)) return;
-		const res = await fetch("/notebooks/delete", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ id: this.#currentNotebookId })
-		});
-		if (!res.ok) return;
-		const data = await res.json();
-		this.#notebooks = data;
-		//todo: select last opened notebook
-		this.#currentNotebookId = Object.keys(this.#notebooks)[0]
-			? Number(Object.keys(this.#notebooks)[0])
-			: null;
-		this.#selected = null;
-		this.#expanded = {};
+		this.#notebook = data;
 		this.render();
 	}
 }

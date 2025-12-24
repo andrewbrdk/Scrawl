@@ -80,7 +80,7 @@ x-scrawl {
 	overflow: hidden;
 
 	aside {
-		width: 17%;
+		width: 15%;
 		height: 100%;
 		padding-left: 0.7rem;
     	justify-content: space-between;
@@ -98,8 +98,7 @@ x-scrawl {
 		&.hidden {
 			display: none;
 		}
-		#nbselect {
-			position: relative;
+		#sidebar-header {
 			display: flex;
 			justify-content: space-between;
 			font-weight: bold;
@@ -110,58 +109,14 @@ x-scrawl {
 			padding-left: 1rem;
 			/*border-bottom: 1px solid #ddd;*/
 			box-sizing: border-box;
-			cursor: pointer;
-		}
-		#nbcurrent {
-			display: flex;
-			align-items: center;
-			justify-content: space-between;
-			width: 100%;
-			overflow: hidden;
 			font-size: 1.6rem;
 		}
-		#nblabel {
+		#sidebar-label {
 			white-space: nowrap;
 			overflow: hidden;
 			text-overflow: ellipsis;
 			flex: 1 1 auto;
 			min-width: 0;
-		}
-		#nbarrow {
-			flex: 0 0 auto;
-			margin-left: 0.3em;
-			font-size: 1rem;
-			opacity: 0;
-		}
-		&:hover #nbarrow {
-			opacity: 1;
-		}
-		#nbmenu {
-			position: absolute;
-			top: 100%;
-			left: 0;
-			background: white;
-			color: inherit;
-			border-radius: 6px;
-			box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
-			margin: 0;
-			padding: 4px 0;
-			z-index: 1000;
-			white-space: nowrap;
-			list-style: none;
-		}
-		#nbmenu li {
-			padding: 6px 12px;
-			cursor: pointer;
-		}
-		#nbmenu li.action {
-			font-weight: normal;
-		}
-		#nbmenu li:hover {
-			scale: 1.05;
-		}
-		#nbselect.single #nbarrow {
-			display: none;
 		}
 		#pages {
 			list-style: none;

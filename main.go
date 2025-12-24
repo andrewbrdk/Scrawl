@@ -160,6 +160,9 @@ func (S *Scrawl) loadNotebook() error {
 		parent := pages[pid]
 		parent.Children = append(parent.Children, kids...)
 	}
+	if S.notebook == nil {
+		S.notebook = &Notebook{}
+	}
 	S.notebook.Pages = top
 	return nil
 }
