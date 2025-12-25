@@ -80,7 +80,7 @@ x-scrawl {
 	overflow: hidden;
 
 	aside {
-		width: 15%;
+		width: 17%;
 		height: 100%;
 		padding-left: 0.7rem;
     	justify-content: space-between;
@@ -202,6 +202,7 @@ x-scrawl {
 			width: 1rem;
 			min-width: 1rem;
 			text-align: center;
+			padding: 0;
 		}
 		button.addchild:hover {
 			scale: 1.5;
@@ -214,6 +215,7 @@ x-scrawl {
 			width: 1rem;
 			min-width: 1rem;
 			text-align: center;
+			padding: 0;
 		}
 		button.delete:hover {
 			color: red;
@@ -342,7 +344,6 @@ x-scrawl {
 }
 
 #pages li.drag-over-child {
-    background-color: #f0f0f0;
     border: 1px solid black;
 }
 
@@ -352,10 +353,17 @@ x-scrawl {
 
 .drag-handle {
     cursor: grab;
-    margin-right: 0.5rem;
     opacity: 0;
     user-select: none;
-    font-size: 0.8em;
+	font-weight: normal;
+	width: 1rem;
+    min-width: 1rem;
+	font-size: 0.9rem;
+	border: none;
+	background: transparent;
+	text-align: center;
+	vertical-align: middle;
+	padding: 0;
 }
 
 #pages li:hover .drag-handle {
