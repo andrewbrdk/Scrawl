@@ -379,18 +379,19 @@ func (S *Scrawl) MovePage(draggedId int, targetId int, placement string) error {
 			newPosition = int(maxPos.Int64) + 1
 		}
 	} else {
-		newParentID = oldParentID
-		var targetPosition int
+		var targetParentId, targetPosition int
 		tx.QueryRow(`
 			SELECT parent_id, position 
 			FROM pagetree
-			WHERE child_id = ?`, targetId).Scan(&newParentID, &targetPosition)
+			WHERE child_id = ?`, targetId).Scan(&targetParentId, &targetPosition)
+		newParentID = targetParentId
 		if placement == "above" {
 			newPosition = targetPosition
 		} else {
 			newPosition = targetPosition + 1
 		}
 	}
+
 	tx.Exec(`
 		UPDATE pagetree 
 		SET parent_id = ?, position = ?
@@ -398,11 +399,11 @@ func (S *Scrawl) MovePage(draggedId int, targetId int, placement string) error {
 	tx.Exec(`
 		UPDATE pagetree 
 		SET position = position - 1
-		WHERE parent_id = ? AND position > ? AND child_id != ?`, oldParentID, oldPosition, draggedId)
+		WHERE parent_id = ? AND position >= ? AND child_id != ?`, oldParentID, oldPosition, draggedId)
 	tx.Exec(`
 		UPDATE pagetree 
 		SET position = position + 1
-		WHERE parent_id = ? AND position > ? AND child_id != ?`, newParentID, newPosition, draggedId)
+		WHERE parent_id = ? AND position >= ? AND child_id != ?`, newParentID, newPosition, draggedId)
 
 	err = tx.Commit()
 	if err != nil {

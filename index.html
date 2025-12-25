@@ -197,12 +197,12 @@ class XScrawl extends HTMLElement {
 
 				li.innerHTML = `
 					<div class="page-row ${isSelected}" data-depth="${depth}">
-						<div class="left">
-							<span class="drag-handle">⠿</span>
+						<div class="left">	
 							<button class="collapse ${collapseHidden} ${collapseClass}">${collapseSymbol}</button>
 							<span class="title">${escapeHTML(page.title)}</span>
 						</div>
 						<div class="right">
+							<span class="drag-handle">⠿</span>
 							<button class="addchild">＋</button>
 							<button class="delete">✕</button>
 						</div>
@@ -383,9 +383,7 @@ class XScrawl extends HTMLElement {
 		this.querySelectorAll('#pages li').forEach(item => {
 			item.classList.remove('drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
 		});
-
 		if (!this.#dragState.dragOverItem) return;
-
 		const targetLi = this.#dragState.dragOverItem;
 		if (this.#dragState.dragPlacement === 'above') {
 			targetLi.classList.add('drag-over-above');
