@@ -126,7 +126,7 @@ x-scrawl {
 			padding: 8px 0px;
 			margin-bottom: 4px;
 			cursor: pointer;
-			border-bottom: 1px solid transparent;
+			border: 1px solid transparent;
 		}
 		#pages li:hover .left {
 			/* todo: reaches left border when too wide */
@@ -330,21 +330,20 @@ x-scrawl {
 }
 
 #pages li.drag-over {
-    border-top: 2px solid #4a90e2;
-    margin-top: 2px;
+    border-top: 1px solid black;
 }
 
 #pages li.drag-over-above {
-    border-top: 2px solid #4a90e2;
+    border-top: 1px solid black;
 }
 
 #pages li.drag-over-below {
-    border-bottom: 2px solid #4a90e2;
+    border-bottom: 1px solid black;
 }
 
 #pages li.drag-over-child {
-    background-color: #e6f7ff;
-    border: 1px dashed #4a90e2;
+    background-color: #f0f0f0;
+    border: 1px solid black;
 }
 
 .page-row.draggable:active {
@@ -355,7 +354,6 @@ x-scrawl {
     cursor: grab;
     margin-right: 0.5rem;
     opacity: 0;
-    transition: opacity 0.2s;
     user-select: none;
     font-size: 0.8em;
 }
