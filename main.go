@@ -9,6 +9,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"sort"
 	"strconv"
 	"time"
 
@@ -191,9 +192,22 @@ func (S *Scrawl) loadNotebook() error {
 			children[parentID] = append(children[parentID], page)
 		}
 	}
+	sort.SliceStable(top, func(i, j int) bool {
+		if top[i].Position == top[j].Position {
+			return top[i].Id < top[j].Id
+		}
+		return top[i].Position < top[j].Position
+	})
+
 	for pid, kids := range children {
+		sort.SliceStable(kids, func(i, j int) bool {
+			if kids[i].Position == kids[j].Position {
+				return kids[i].Id < kids[j].Id
+			}
+			return kids[i].Position < kids[j].Position
+		})
 		parent := pages[pid]
-		parent.Children = append(parent.Children, kids...)
+		parent.Children = kids
 	}
 	if S.notebook == nil {
 		S.notebook = &Notebook{}
@@ -384,11 +398,11 @@ func (S *Scrawl) MovePage(draggedId int, targetId int, placement string) error {
 	tx.Exec(`
 		UPDATE pagetree 
 		SET position = position - 1
-		WHERE parent_id = ? AND position > ?`, oldParentID, oldPosition)
+		WHERE parent_id = ? AND position > ? AND child_id != ?`, oldParentID, oldPosition, draggedId)
 	tx.Exec(`
 		UPDATE pagetree 
 		SET position = position + 1
-		WHERE parent_id = ? AND position > ?`, newParentID, newPosition)
+		WHERE parent_id = ? AND position > ? AND child_id != ?`, newParentID, newPosition, draggedId)
 
 	err = tx.Commit()
 	if err != nil {
