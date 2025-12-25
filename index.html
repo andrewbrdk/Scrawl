@@ -111,9 +111,7 @@ class XScrawl extends HTMLElement {
 	#dragState = {
 		draggedItem: null,
 		dragOverItem: null,
-		dragPosition: null,
-		originalParent: null,
-		originalIndex: null
+		dragPlacement: null
 	};
 
 	constructor() {
@@ -200,7 +198,7 @@ class XScrawl extends HTMLElement {
 				li.innerHTML = `
 					<div class="page-row ${isSelected}" data-depth="${depth}">
 						<div class="left">
-							<span class="drag-handle">⠿⠿</span>
+							<span class="drag-handle">⠿</span>
 							<button class="collapse ${collapseHidden} ${collapseClass}">${collapseSymbol}</button>
 							<span class="title">${escapeHTML(page.title)}</span>
 						</div>
@@ -327,46 +325,30 @@ class XScrawl extends HTMLElement {
 			pageRow.classList.add('draggable');
 			pageRow.draggable = true;
 
-			pageRow.addEventListener('dragstart', (e) => {
+			pageRow.ondragstart = (e) => {
 				this.#dragState.draggedItem = li;
-				this.#dragState.originalParent = this.getPageParent(parseInt(li.dataset.id));
-				this.#dragState.originalIndex = this.getPageIndex(parseInt(li.dataset.id));
-
-				e.dataTransfer.setData('text/plain', li.dataset.id);
-				e.dataTransfer.effectAllowed = 'move';
 				li.classList.add('dragging');
+			};
 
-				setTimeout(() => {
-					li.style.display = 'none';
-				}, 0);
-			});
-
-			pageRow.addEventListener('dragend', () => {
+			pageRow.ondragend = () => {
 				this.querySelectorAll('#pages li').forEach(item => {
 					item.classList.remove('drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
 				});
-
 				if (this.#dragState.draggedItem) {
-					this.#dragState.draggedItem.style.display = '';
+					//this.#dragState.draggedItem.style.display = '';
 					this.#dragState.draggedItem.classList.remove('dragging');
 				}
-
-				if (this.#dragState.dragOverItem && this.#dragState.dragPosition) {
+				if (this.#dragState.dragOverItem) {
 					this.handleDrop();
 				}
-
 				this.#dragState = {
 					draggedItem: null,
 					dragOverItem: null,
-					dragPosition: null,
-					originalParent: null,
-					originalIndex: null
+					dragPlacement: null
 				};
-			});
-		});
+			};
 
-		pages.forEach(li => {
-			li.addEventListener('dragover', (e) => {
+			li.ondragover = (e) => {
 				e.preventDefault();
 				if (li === this.#dragState.draggedItem) return;
 
@@ -374,26 +356,26 @@ class XScrawl extends HTMLElement {
 
 				if (e.clientY < rect.top + 20) {
 					this.#dragState.dragOverItem = li;
-					this.#dragState.dragPosition = 'above';
+					this.#dragState.dragPlacement = 'above';
 					this.updateDragFeedback();
 				} else if (e.clientY > rect.bottom - 20) {
 					this.#dragState.dragOverItem = li;
-					this.#dragState.dragPosition = 'below';
+					this.#dragState.dragPlacement = 'below';
 					this.updateDragFeedback();
-				} else if (li.dataset.haschildren === 'true') {
+				} else {
 					this.#dragState.dragOverItem = li;
-					this.#dragState.dragPosition = 'child';
+					this.#dragState.dragPlacement = 'child';
 					this.updateDragFeedback();
 				}
-			});
+			};
 
-			li.addEventListener('dragleave', () => {
+			li.ondragleave = () => {
 				if (li === this.#dragState.dragOverItem) {
 					li.classList.remove('drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
 					this.#dragState.dragOverItem = null;
-					this.#dragState.dragPosition = null;
+					this.#dragState.dragPlacement = null;
 				}
-			});
+			};
 		});
 	}
 
@@ -405,80 +387,22 @@ class XScrawl extends HTMLElement {
 		if (!this.#dragState.dragOverItem) return;
 
 		const targetLi = this.#dragState.dragOverItem;
-		if (this.#dragState.dragPosition === 'above') {
+		if (this.#dragState.dragPlacement === 'above') {
 			targetLi.classList.add('drag-over-above');
-		} else if (this.#dragState.dragPosition === 'below') {
+		} else if (this.#dragState.dragPlacement === 'below') {
 			targetLi.classList.add('drag-over-below');
-		} else if (this.#dragState.dragPosition === 'child') {
+		} else if (this.#dragState.dragPlacement === 'child') {
 			targetLi.classList.add('drag-over-child');
 		} else {
 			targetLi.classList.add('drag-over');
 		}
 	}
 
-	getPageParent(pageId, pages = null) {
-		if (pages === null) pages = this.#notebook.pages;
-
-		for (const page of pages) {
-			for (const child of page.children || []) {
-				if (child.id == pageId) return page.id;
-				const nestedParent = this.getPageParent(pageId, child.children || []);
-				if (nestedParent !== null) return nestedParent;
-			}
-		}
-		return null;
-	}
-
-	getPageIndex(pageId, parentId = null) {
-		let pagesToSearch = parentId === null ?
-			this.#notebook.pages :
-			(this.findPageById(parentId)?.children || []);
-
-		for (let i = 0; i < pagesToSearch.length; i++) {
-			if (pagesToSearch[i].id == pageId) return i;
-		}
-		return -1;
-	}
-
-	findPageById(id, pages = null) {
-		if (pages === null) pages = this.#notebook.pages;
-
-		for (const page of pages) {
-			if (page.id == id) return page;
-			if (page.children) {
-				const found = this.findPageById(id, page.children);
-				if (found) return found;
-			}
-		}
-		return null;
-	}
-
 	handleDrop() {
-		const draggedId = this.#dragState.draggedItem.dataset.id;
-		const targetId = this.#dragState.dragOverItem.dataset.id;
-		const placement = this.#dragState.dragPosition;
+		const draggedId = parseInt(this.#dragState.draggedItem.dataset.id);
+		const targetId = parseInt(this.#dragState.dragOverItem.dataset.id);
+		const placement = this.#dragState.dragPlacement;
 		this.movePage(draggedId, targetId, placement);
-	}
-
-	async movePage(draggedId, targetId, placement) {
-		const response = await fetch('/move', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({
-				draggedId: parseInt(draggedId),
-				targetId: parseInt(targetId),
-				placement: placement
-			})
-		});
-
-		if (response.ok) {
-			const data = await response.json();
-			this.#notebook = data;
-			await this.render();
-		} else {
-			console.error("Failed to move page");
-			await this.render();
-		}
 	}
 
 	unbindEvents() {
@@ -595,6 +519,25 @@ class XScrawl extends HTMLElement {
 		if (!res.ok) {
 			console.error("Rename failed");
 			this.#pagetitle.value = oldTitle;
+			return;
+		}
+		const data = await res.json();
+		this.#notebook = data;
+		this.render();
+	}
+
+	async movePage(draggedId, targetId, placement) {
+		const res = await fetch('/move', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				draggedId: draggedId,
+				targetId: targetId,
+				placement: placement
+			})
+		});
+		if (!res.ok) {
+			console.error("Failed to move page");
 			return;
 		}
 		const data = await res.json();
