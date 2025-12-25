@@ -87,7 +87,7 @@ x-scrawl {
     	align-items: center;
 		overflow-y: auto;
 		overflow: visible;
-		
+
 		/* todo: scrollbar on hover */
 		scrollbar-width: none;
 		&::-webkit-scrollbar {
@@ -142,7 +142,7 @@ x-scrawl {
 			display: flex;
 			flex: 1 1 auto;
 			align-items: center;
-			min-width: 0;  
+			min-width: 0;
 		}
 		.page-row .left .title {
 			flex: 1 1 auto;
@@ -272,7 +272,7 @@ x-scrawl {
 		padding: 0 2rem;
 		overflow-y: hidden;
     	height: 100%;
-	
+
 		.content-header {
 			flex: 0 0 auto;
 			display: flex;
@@ -282,7 +282,7 @@ x-scrawl {
 			padding-top: 0.5rem;
 			/*border-bottom: 1px solid #ddd;*/
 			box-sizing: border-box;
-			
+
 			#pagetitle {
 				font-size: 1.6rem;
 				font-weight: bold;
@@ -293,7 +293,7 @@ x-scrawl {
 				padding: 0;
 				/* margin-left: 1rem; */
 				font-family: inherit;
-				cursor: text; 
+				cursor: text;
 			}
 			#pagetitle:focus {
 				border-bottom: 1px solid #ccc;
@@ -321,4 +321,53 @@ x-scrawl {
 			display: none;
 		}
 	}
+}
+
+/* Drag-and-drop styles */
+#pages li.dragging {
+    opacity: 0.5;
+    background-color: #f0f0f0;
+}
+
+#pages li.drag-over {
+    border-top: 2px solid #4a90e2;
+    margin-top: 2px;
+}
+
+#pages li.drag-over-above {
+    border-top: 2px solid #4a90e2;
+}
+
+#pages li.drag-over-below {
+    border-bottom: 2px solid #4a90e2;
+}
+
+#pages li.drag-over-child {
+    background-color: #e6f7ff;
+    border: 1px dashed #4a90e2;
+}
+
+.page-row.draggable {
+    cursor: grab;
+}
+
+.page-row.draggable:active {
+    cursor: grabbing;
+}
+
+.drag-handle {
+    cursor: grab;
+    margin-right: 0.5rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+    user-select: none;
+    font-size: 0.8em;
+}
+
+#pages li:hover .drag-handle {
+    opacity: 1;
+}
+
+.page-row.dragging .drag-handle {
+    cursor: grabbing;
 }

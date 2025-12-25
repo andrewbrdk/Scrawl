@@ -10,14 +10,14 @@
 	<script src="https://cdn.quilljs.com/1.3.7/quill.min.js"></script>
 </head>
 <body>
-	
+
 <x-main></x-main>
 
 <script>
 class XMain extends HTMLElement {
 	#login = null;
 	#scrawl = null;
-	
+
 	constructor() {
 		super();
 		this.innerHTML = `
@@ -108,6 +108,13 @@ class XScrawl extends HTMLElement {
 	#sidebarDefaultWidth = "15%";
 	#sidebarMinWidth = 120; //todo: css 
 	#collapseEdgeThreshold = 30;
+	#dragState = {
+		draggedItem: null,
+		dragOverItem: null,
+		dragPosition: null,
+		originalParent: null,
+		originalIndex: null
+	};
 
 	constructor() {
 		super();
@@ -193,6 +200,7 @@ class XScrawl extends HTMLElement {
 				li.innerHTML = `
 					<div class="page-row ${isSelected}" data-depth="${depth}">
 						<div class="left">
+							<span class="drag-handle">⠿⠿</span>
 							<button class="collapse ${collapseHidden} ${collapseClass}">${collapseSymbol}</button>
 							<span class="title">${escapeHTML(page.title)}</span>
 						</div>
@@ -228,6 +236,7 @@ class XScrawl extends HTMLElement {
 
 	bindEvents() {
 		this.unbindEvents();
+		this.bindDragEvents();
 
 		this.#resizer.onmousedown = (e) => {
 			if (this.#aside.classList.contains("hidden")) {
@@ -264,7 +273,7 @@ class XScrawl extends HTMLElement {
 				document.body.style.userSelect = "";
 			}
 		};
-		
+
 		this.querySelector("#newpage").onclick = () => {
 			this.createPage("New Page", null);
 		};
@@ -310,7 +319,168 @@ class XScrawl extends HTMLElement {
 			renameTimer = setTimeout(() => {this.saveTitleChange();}, 400);
 		};
 	}
-	
+
+	bindDragEvents() {
+		const pages = this.querySelectorAll('#pages li');
+		pages.forEach(li => {
+			const pageRow = li.querySelector('.page-row');
+			pageRow.classList.add('draggable');
+			pageRow.draggable = true;
+
+			pageRow.addEventListener('dragstart', (e) => {
+				this.#dragState.draggedItem = li;
+				this.#dragState.originalParent = this.getPageParent(parseInt(li.dataset.id));
+				this.#dragState.originalIndex = this.getPageIndex(parseInt(li.dataset.id));
+
+				e.dataTransfer.setData('text/plain', li.dataset.id);
+				e.dataTransfer.effectAllowed = 'move';
+				li.classList.add('dragging');
+
+				setTimeout(() => {
+					li.style.display = 'none';
+				}, 0);
+			});
+
+			pageRow.addEventListener('dragend', () => {
+				this.querySelectorAll('#pages li').forEach(item => {
+					item.classList.remove('drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
+				});
+
+				if (this.#dragState.draggedItem) {
+					this.#dragState.draggedItem.style.display = '';
+					this.#dragState.draggedItem.classList.remove('dragging');
+				}
+
+				if (this.#dragState.dragOverItem && this.#dragState.dragPosition) {
+					this.handleDrop();
+				}
+
+				this.#dragState = {
+					draggedItem: null,
+					dragOverItem: null,
+					dragPosition: null,
+					originalParent: null,
+					originalIndex: null
+				};
+			});
+		});
+
+		pages.forEach(li => {
+			li.addEventListener('dragover', (e) => {
+				e.preventDefault();
+				if (li === this.#dragState.draggedItem) return;
+
+				const rect = li.getBoundingClientRect();
+
+				if (e.clientY < rect.top + 20) {
+					this.#dragState.dragOverItem = li;
+					this.#dragState.dragPosition = 'above';
+					this.updateDragFeedback();
+				} else if (e.clientY > rect.bottom - 20) {
+					this.#dragState.dragOverItem = li;
+					this.#dragState.dragPosition = 'below';
+					this.updateDragFeedback();
+				} else if (li.dataset.haschildren === 'true') {
+					this.#dragState.dragOverItem = li;
+					this.#dragState.dragPosition = 'child';
+					this.updateDragFeedback();
+				}
+			});
+
+			li.addEventListener('dragleave', () => {
+				if (li === this.#dragState.dragOverItem) {
+					li.classList.remove('drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
+					this.#dragState.dragOverItem = null;
+					this.#dragState.dragPosition = null;
+				}
+			});
+		});
+	}
+
+	updateDragFeedback() {
+		this.querySelectorAll('#pages li').forEach(item => {
+			item.classList.remove('drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
+		});
+
+		if (!this.#dragState.dragOverItem) return;
+
+		const targetLi = this.#dragState.dragOverItem;
+		if (this.#dragState.dragPosition === 'above') {
+			targetLi.classList.add('drag-over-above');
+		} else if (this.#dragState.dragPosition === 'below') {
+			targetLi.classList.add('drag-over-below');
+		} else if (this.#dragState.dragPosition === 'child') {
+			targetLi.classList.add('drag-over-child');
+		} else {
+			targetLi.classList.add('drag-over');
+		}
+	}
+
+	getPageParent(pageId, pages = null) {
+		if (pages === null) pages = this.#notebook.pages;
+
+		for (const page of pages) {
+			for (const child of page.children || []) {
+				if (child.id == pageId) return page.id;
+				const nestedParent = this.getPageParent(pageId, child.children || []);
+				if (nestedParent !== null) return nestedParent;
+			}
+		}
+		return null;
+	}
+
+	getPageIndex(pageId, parentId = null) {
+		let pagesToSearch = parentId === null ?
+			this.#notebook.pages :
+			(this.findPageById(parentId)?.children || []);
+
+		for (let i = 0; i < pagesToSearch.length; i++) {
+			if (pagesToSearch[i].id == pageId) return i;
+		}
+		return -1;
+	}
+
+	findPageById(id, pages = null) {
+		if (pages === null) pages = this.#notebook.pages;
+
+		for (const page of pages) {
+			if (page.id == id) return page;
+			if (page.children) {
+				const found = this.findPageById(id, page.children);
+				if (found) return found;
+			}
+		}
+		return null;
+	}
+
+	handleDrop() {
+		const draggedId = this.#dragState.draggedItem.dataset.id;
+		const targetId = this.#dragState.dragOverItem.dataset.id;
+		const placement = this.#dragState.dragPosition;
+		this.movePage(draggedId, targetId, placement);
+	}
+
+	async movePage(draggedId, targetId, placement) {
+		const response = await fetch('/move', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({
+				draggedId: parseInt(draggedId),
+				targetId: parseInt(targetId),
+				placement: placement
+			})
+		});
+
+		if (response.ok) {
+			const data = await response.json();
+			this.#notebook = data;
+			await this.render();
+		} else {
+			console.error("Failed to move page");
+			await this.render();
+		}
+	}
+
 	unbindEvents() {
 		this.onclick = null;
 		this.querySelectorAll('button').forEach(btn => btn.onclick = null);
@@ -328,7 +498,7 @@ class XScrawl extends HTMLElement {
 			let left = parseFloat(tooltip.style.left || 0);
 			if (tooltipRect.left < editorRect.left) {
 				left += editorRect.left - tooltipRect.left;
-			} 
+			}
 			else if (tooltipRect.right > editorRect.right) {
 				left -= tooltipRect.right - editorRect.right;
 			}
@@ -416,7 +586,7 @@ class XScrawl extends HTMLElement {
 		const newTitle = this.#pagetitle.value.trim();
 		const oldTitle = this.getPageTitleById(this.#selected);
 		if (!newTitle || newTitle === oldTitle) return;
-		
+
 		const res = await fetch('/rename', {
 			method: 'POST',
 			headers: { 'Content-Type': 'application/json' },

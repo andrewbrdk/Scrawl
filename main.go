@@ -47,6 +47,7 @@ type Notebook struct {
 type Page struct {
 	Id       int     `json:"id"`
 	Title    string  `json:"title"`
+	Position int     `json:"position"`
 	Children []*Page `json:"children"`
 }
 
@@ -98,9 +99,10 @@ func (S *Scrawl) initDB() {
     		updated DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
         );
 
-        CREATE TABLE IF NOT EXISTS children (
+        CREATE TABLE IF NOT EXISTS pagetree (
             parent_id INTEGER NOT NULL,
 			child_id INTEGER NOT NULL UNIQUE,
+			position INTEGER NOT NULL DEFAULT 0,
 			PRIMARY KEY(parent_id, child_id),
 			FOREIGN KEY(parent_id) REFERENCES pages(id) ON DELETE CASCADE,
 			FOREIGN KEY(child_id) REFERENCES pages(id) ON DELETE CASCADE
@@ -115,9 +117,17 @@ func (S *Scrawl) initDB() {
 		infoLog.Println("Database created")
 		delta := `{"ops":[{"insert": "Welcome to Scrawl!\n"}]}`
 		title := "Welcome"
-		_, err := S.db.Exec(`
+
+		tx, _ := S.db.Begin()
+		tx.Exec(`INSERT INTO pages (id, title, delta) VALUES (0, '__root__', '{}')`)
+		result, _ := tx.Exec(`
 			INSERT INTO pages (title, delta)
 			VALUES (?, ?)`, title, delta)
+		welcomeId, _ := result.LastInsertId()
+		tx.Exec(`
+			INSERT INTO pagetree (parent_id, child_id, position)
+			VALUES (0, ?, 0)`, welcomeId)
+		err := tx.Commit()
 		if err != nil {
 			errorLog.Printf("failed to create welcome page: %v", err)
 		}
@@ -139,10 +149,14 @@ func (S *Scrawl) loadNotebook() error {
         SELECT 
 			p.id, 
 			p.title, 
-			c.parent_id
+			pt.parent_id,
+			pt.position
         FROM pages p
-        LEFT JOIN children c
-			ON p.id = c.child_id`)
+        LEFT JOIN pagetree pt
+			ON p.id = pt.child_id
+		where 
+			p.id != 0
+		ORDER BY pt.parent_id, pt.position, p.id`)
 	if err != nil {
 		errorLog.Printf("loadNotebook error: %v", err)
 		return nil
@@ -157,8 +171,9 @@ func (S *Scrawl) loadNotebook() error {
 	for rows.Next() {
 		var id int
 		var title string
-		var parentID sql.NullInt64
-		err := rows.Scan(&id, &title, &parentID)
+		var parentID int
+		var position int
+		err := rows.Scan(&id, &title, &parentID, &position)
 		if err != nil {
 			errorLog.Printf("loadNotebook scan error: %v", err)
 			return nil
@@ -166,14 +181,14 @@ func (S *Scrawl) loadNotebook() error {
 		page := &Page{
 			Id:       id,
 			Title:    title,
+			Position: position,
 			Children: []*Page{},
 		}
 		pages[id] = page
-		if parentID.Valid {
-			pid := int(parentID.Int64)
-			children[pid] = append(children[pid], page)
-		} else {
+		if parentID == 0 {
 			top = append(top, page)
+		} else {
+			children[parentID] = append(children[parentID], page)
 		}
 	}
 	for pid, kids := range children {
@@ -212,29 +227,32 @@ func (S *Scrawl) CreatePage(title string, parentID int) (int, error) {
 			tx.Rollback()
 		}
 	}()
-	res, err := tx.Exec(`
+
+	var maxPos sql.NullInt64
+	tx.QueryRow(`
+		SELECT MAX(position) 
+		FROM pagetree
+		WHERE parent_id = ?
+	`, parentID).Scan(&maxPos)
+
+	position := 0
+	if maxPos.Valid {
+		position = int(maxPos.Int64) + 1
+	}
+
+	res, _ := tx.Exec(`
         INSERT INTO pages(title, delta)
         VALUES (?, ?)
     `, title, delta)
+	newId, _ := res.LastInsertId()
+
+	tx.Exec(`
+		INSERT INTO pagetree(parent_id, child_id, position)
+		VALUES (?, ?, ?)
+	`, parentID, newId, position)
+
+	err = tx.Commit()
 	if err != nil {
-		errorLog.Printf("Failed to insert page: %v", err)
-		return 0, err
-	}
-	newId, err := res.LastInsertId()
-	if err != nil {
-		return 0, err
-	}
-	if parentID != 0 {
-		_, err = tx.Exec(`
-            INSERT INTO children(parent_id, child_id)
-            VALUES (?, ?)
-        `, parentID, newId)
-		if err != nil {
-			errorLog.Printf("Failed to insert into children: %v", err)
-			return 0, err
-		}
-	}
-	if err = tx.Commit(); err != nil {
 		errorLog.Printf("Commit failed: %v", err)
 		return 0, err
 	}
@@ -265,14 +283,21 @@ func (S *Scrawl) DeletePage(id int) error {
 			tx.Rollback()
 		}
 	}()
+
+	var parentID int
+	var deletedPosition int
+	tx.QueryRow(`
+		SELECT parent_id, position 
+		FROM pagetree WHERE child_id = ?`, id).Scan(&parentID, &deletedPosition)
+
 	_, err = tx.Exec(`
         WITH RECURSIVE descendants(id) AS (
             SELECT ? as id
             UNION ALL
             SELECT child_id
-            FROM children
+            FROM pagetree
             JOIN descendants 
-				ON children.parent_id = descendants.id
+				ON pagetree.parent_id = descendants.id
         )
         DELETE FROM pages
         WHERE id IN (SELECT id FROM descendants)
@@ -281,6 +306,13 @@ func (S *Scrawl) DeletePage(id int) error {
 		errorLog.Printf("Failed deleting pages recursively: %v", err)
 		return err
 	}
+
+	tx.Exec(`
+		UPDATE pagetree 
+		SET position = position - 1
+		WHERE parent_id = ? AND position > ?
+	`, parentID, deletedPosition)
+
 	err = tx.Commit()
 	if err != nil {
 		errorLog.Printf("Commit failed during delete: %v", err)
@@ -304,6 +336,70 @@ func (S *Scrawl) RenamePage(id int, newTitle string) error {
 	return nil
 }
 
+func (S *Scrawl) MovePage(draggedId int, targetId int, placement string) error {
+	tx, err := S.db.Begin()
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err != nil {
+			tx.Rollback()
+		}
+	}()
+
+	var oldParentID, oldPosition int
+	tx.QueryRow(`
+		SELECT parent_id, position FROM pagetree WHERE child_id = ?
+	`, draggedId).Scan(&oldParentID, &oldPosition)
+
+	var newParentID, newPosition int
+	if placement == "child" {
+		newParentID = targetId
+		newPosition = 0
+		var maxPos sql.NullInt64
+		tx.QueryRow(`
+			SELECT MAX(position) 
+			FROM pagetree
+			WHERE parent_id = ?`, targetId).Scan(&maxPos)
+		if maxPos.Valid {
+			newPosition = int(maxPos.Int64) + 1
+		}
+	} else {
+		newParentID = oldParentID
+		var targetPosition int
+		tx.QueryRow(`
+			SELECT parent_id, position 
+			FROM pagetree
+			WHERE child_id = ?`, targetId).Scan(&newParentID, &targetPosition)
+		if placement == "above" {
+			newPosition = targetPosition
+		} else {
+			newPosition = targetPosition + 1
+		}
+	}
+	tx.Exec(`
+		UPDATE pagetree 
+		SET parent_id = ?, position = ?
+		WHERE child_id = ?`, newParentID, newPosition, draggedId)
+	tx.Exec(`
+		UPDATE pagetree 
+		SET position = position - 1
+		WHERE parent_id = ? AND position > ?`, oldParentID, oldPosition)
+	tx.Exec(`
+		UPDATE pagetree 
+		SET position = position + 1
+		WHERE parent_id = ? AND position > ?`, newParentID, newPosition)
+
+	err = tx.Commit()
+	if err != nil {
+		errorLog.Printf("Commit failed during reorder: %v", err)
+		return err
+	}
+
+	S.loadNotebook()
+	return nil
+}
+
 type Response struct {
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
@@ -319,6 +415,7 @@ func httpServer() {
 	http.HandleFunc("/create", httpCreatePage)
 	http.HandleFunc("/delete", httpDeletePage)
 	http.HandleFunc("/rename", httpRenamePage)
+	http.HandleFunc("/move", httpMovePage)
 	log.Fatal(http.ListenAndServe(CONF.port, nil))
 }
 
@@ -534,6 +631,40 @@ func httpRenamePage(w http.ResponseWriter, r *http.Request) {
 	err = SCRAWL.RenamePage(req.Id, req.Title)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(SCRAWL.notebook)
+}
+
+func httpMovePage(w http.ResponseWriter, r *http.Request) {
+	err, code, msg := httpCheckAuth(w, r)
+	if err != nil {
+		http.Error(w, msg, code)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		DraggedId int    `json:"draggedId"`
+		TargetId  int    `json:"targetId"`
+		Placement string `json:"placement"`
+	}
+	err = json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	if req.Placement != "above" && req.Placement != "below" && req.Placement != "child" {
+		http.Error(w, "Invalid placement", http.StatusBadRequest)
+		return
+	}
+
+	err = SCRAWL.MovePage(req.DraggedId, req.TargetId, req.Placement)
+	if err != nil {
+		http.Error(w, "Failed to reorder page", http.StatusInternalServerError)
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
