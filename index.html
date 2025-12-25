@@ -202,7 +202,7 @@ class XScrawl extends HTMLElement {
 							<span class="title">${escapeHTML(page.title)}</span>
 						</div>
 						<div class="right">
-							<span class="drag-handle">⠿</span>
+							<span class="drag-handle" draggable="true">⠿</span>
 							<button class="addchild">＋</button>
 							<button class="delete">✕</button>
 						</div>
@@ -321,16 +321,21 @@ class XScrawl extends HTMLElement {
 	bindDragEvents() {
 		const pages = this.querySelectorAll('#pages li');
 		pages.forEach(li => {
-			const pageRow = li.querySelector('.page-row');
-			pageRow.classList.add('draggable');
-			pageRow.draggable = true;
+			const handle = li.querySelector('.drag-handle');
 
-			pageRow.ondragstart = (e) => {
+			handle.ondragstart = (e) => {
 				this.#dragState.draggedItem = li;
 				li.classList.add('dragging');
+				const liRect = li.getBoundingClientRect();
+				const cursorX = e.clientX;
+				const cursorY = e.clientY;
+				const offsetX = cursorX - liRect.left;
+				const offsetY = cursorY - liRect.top;
+				e.dataTransfer.setDragImage(li, offsetX, offsetY);
+				e.dataTransfer.effectAllowed = "move";
 			};
 
-			pageRow.ondragend = () => {
+			handle.ondragend = () => {
 				this.querySelectorAll('#pages li').forEach(item => {
 					item.classList.remove('drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
 				});

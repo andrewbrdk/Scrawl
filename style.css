@@ -347,10 +347,6 @@ x-scrawl {
     border: 1px dashed #4a90e2;
 }
 
-.page-row.draggable {
-    cursor: grab;
-}
-
 .page-row.draggable:active {
     cursor: grabbing;
 }
