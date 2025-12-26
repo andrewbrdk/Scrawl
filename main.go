@@ -351,6 +351,23 @@ func (S *Scrawl) RenamePage(id int, newTitle string) error {
 }
 
 func (S *Scrawl) MovePage(draggedId int, targetId int, placement string) error {
+	var exists int
+	err := S.db.QueryRow(`
+        WITH RECURSIVE descendants(id) AS (
+			SELECT ? AS id
+			UNION ALL
+			SELECT child_id as id
+			FROM pagetree
+			JOIN descendants 
+				ON pagetree.parent_id = descendants.id
+		)
+        SELECT 1 FROM descendants WHERE id = ? LIMIT 1
+    `, draggedId, targetId).Scan(&exists)
+	if err != sql.ErrNoRows {
+		errorLog.Printf("Can't move page into its own descendant: draggedId=%d, targetId=%d", draggedId, targetId)
+		return err
+	}
+
 	tx, err := S.db.Begin()
 	if err != nil {
 		return err
