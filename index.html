@@ -234,8 +234,7 @@ class XScrawl extends HTMLElement {
 
 	bindEvents() {
 		this.unbindEvents();
-		this.bindDragEvents();
-
+		
 		this.#resizer.onmousedown = (e) => {
 			if (this.#aside.classList.contains("hidden")) {
 				this.expandSidebar();
@@ -310,6 +309,8 @@ class XScrawl extends HTMLElement {
 				this.render();
 			};
 		});
+	
+		this.bindDragEvents();
 
 		let renameTimer = null;
 		this.#pagetitle.oninput = () => {
@@ -337,15 +338,9 @@ class XScrawl extends HTMLElement {
 
 			handle.ondragend = () => {
 				this.querySelectorAll('#pages li').forEach(item => {
-					item.classList.remove('drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
+					item.classList.remove('dragging', 'drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
 				});
-				if (this.#dragState.draggedItem) {
-					//this.#dragState.draggedItem.style.display = '';
-					this.#dragState.draggedItem.classList.remove('dragging');
-				}
-				if (this.#dragState.dragOverItem) {
-					this.handleDrop();
-				}
+				this.handleDrop();
 				this.#dragState = {
 					draggedItem: null,
 					dragOverItem: null,
@@ -356,22 +351,19 @@ class XScrawl extends HTMLElement {
 			li.ondragover = (e) => {
 				e.preventDefault();
 				if (li === this.#dragState.draggedItem) return;
-
 				const rect = li.getBoundingClientRect();
-
-				if (e.clientY < rect.top + 20) {
-					this.#dragState.dragOverItem = li;
+				const y = e.clientY - rect.top;
+				const h = rect.height;
+				const edge = Math.min(20, h * 0.25);
+				this.#dragState.dragOverItem = li;
+				if (y < edge) {
 					this.#dragState.dragPlacement = 'above';
-					this.updateDragFeedback();
-				} else if (e.clientY > rect.bottom - 20) {
-					this.#dragState.dragOverItem = li;
+				} else if (y > h - edge) {
 					this.#dragState.dragPlacement = 'below';
-					this.updateDragFeedback();
 				} else {
-					this.#dragState.dragOverItem = li;
 					this.#dragState.dragPlacement = 'child';
-					this.updateDragFeedback();
 				}
+				this.updateDragFeedback();
 			};
 
 			li.ondragleave = () => {
@@ -402,6 +394,7 @@ class XScrawl extends HTMLElement {
 	}
 
 	handleDrop() {
+		if (!this.#dragState.dragOverItem) return;
 		const draggedId = parseInt(this.#dragState.draggedItem.dataset.id);
 		const targetId = parseInt(this.#dragState.dragOverItem.dataset.id);
 		const placement = this.#dragState.dragPlacement;
