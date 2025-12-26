@@ -293,7 +293,7 @@ x-scrawl {
 				width: 100%;
 				background: transparent;
 				padding: 0;
-				/* margin-left: 1rem; */
+				text-align: center;
 				font-family: inherit;
 				cursor: text;
 			}
