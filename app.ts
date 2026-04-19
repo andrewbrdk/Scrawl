@@ -1,5 +1,10 @@
 import Quill from 'quill';
 import 'quill/dist/quill.bubble.css';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
+import Formula from 'quill/formats/formula';
+
+window.katex = katex;
 
 interface Page {
     id: number;
@@ -22,6 +27,8 @@ interface CreatePageResponse {
     id: number;
     notebook: Notebook;
 }
+
+Quill.register(Formula);
 
 class XMain extends HTMLElement {
     #login: HTMLElement | null = null;
@@ -157,6 +164,7 @@ class XScrawl extends HTMLElement {
                         ['bold', 'italic', 'underline'],
                         ['image'],
                         ['code-block'],
+                        ['formula'],
                         ['clean']
                     ],
                     keyboard: {
@@ -191,38 +199,38 @@ class XScrawl extends HTMLElement {
                                     return false;
                                 }
                             },
-                            backtick: {                                                                                                                
-                                key: '`',                                                                                                              
-                                handler(this: any, range: any) {                                                                                       
-                                    const format = this.quill.getFormat(range.index);                                                                  
-                                    if (format.code) {                                                                                                 
-                                        let pos = range.index;                                                                                         
-                                        while (this.quill.getFormat(pos).code) {                                                                       
-                                            pos++;                                                                                                     
-                                        }                                                                                                               
-                                        this.quill.insertText(pos - 1, ' ', { code: false });                                                                            
-                                        this.quill.setSelection(pos, 0);                                                                              
-                                        return false;                                                                                                  
-                                    }                                                                                                                  
-                                    const textBefore = this.quill.getText(0, range.index);                                                             
-                                    const lineStart = textBefore.lastIndexOf('\n') + 1;                                                                
-                                    const lineText = textBefore.slice(lineStart);                                                                      
-                                    if (lineText === '`') {                                                                                            
-                                        this.quill.deleteText(lineStart, 1);                                                                           
-                                        this.quill.formatLine(lineStart, 1, 'code-block', true);                                                       
-                                        return false;                                                                                                  
-                                    }                                                                                                                  
-                                    if (lineText.endsWith('`')) {                                                                                      
-                                        const openingPos = textBefore.lastIndexOf('`');                                                                
-                                        this.quill.deleteText(openingPos, 1);                                                                          
-                                        this.quill.insertText(openingPos, '  ', { code: true });                                                       
-                                        this.quill.formatText(openingPos + 2, 1, { code: false });                                                     
-                                        this.quill.setSelection(openingPos + 1, 0);                                                                    
-                                        return false;                                                                                                  
-                                    }                                                                                                                  
-                                    return true;                                                                                                       
-                                }                                                                                                                      
-                            },                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+                            backtick: {
+                                key: '`',
+                                handler(this: any, range: any) {
+                                    const format = this.quill.getFormat(range.index);
+                                    if (format.code) {
+                                        let pos = range.index;
+                                        while (this.quill.getFormat(pos).code) {
+                                            pos++;
+                                        }
+                                        this.quill.insertText(pos - 1, ' ', { code: false });
+                                        this.quill.setSelection(pos, 0);
+                                        return false;
+                                    }
+                                    const textBefore = this.quill.getText(0, range.index);
+                                    const lineStart = textBefore.lastIndexOf('\n') + 1;
+                                    const lineText = textBefore.slice(lineStart);
+                                    if (lineText === '`') {
+                                        this.quill.deleteText(lineStart, 1);
+                                        this.quill.formatLine(lineStart, 1, 'code-block', true);
+                                        return false;
+                                    }
+                                    if (lineText.endsWith('`')) {
+                                        const openingPos = textBefore.lastIndexOf('`');
+                                        this.quill.deleteText(openingPos, 1);
+                                        this.quill.insertText(openingPos, '  ', { code: true });
+                                        this.quill.formatText(openingPos + 2, 1, { code: false });
+                                        this.quill.setSelection(openingPos + 1, 0);
+                                        return false;
+                                    }
+                                    return true;
+                                }
+                            },                                                                                             
                         }
                     }
                 },
@@ -233,14 +241,14 @@ class XScrawl extends HTMLElement {
                 if (saveTimer) clearTimeout(saveTimer);
                 saveTimer = setTimeout(() => this.savePage(), 500);
             });
-			//todo: slows down
+            //todo: slows down
             this.shiftQuillTooltip();
         }
     }
 
     async init(notebook: Notebook): Promise<void> {
         this.#notebook = notebook;
-		//todo: select last opened page
+        //todo: select last opened page
         this.#selected = this.#notebook?.pages.length > 0 ? this.#notebook.pages[0].id : null;
         await this.render();
     }
@@ -248,7 +256,7 @@ class XScrawl extends HTMLElement {
     async render(): Promise<void> {
         this.updatePages();
         this.bindEvents();
-		//todo: handle empty notebook
+        //todo: handle empty notebook
         this.updateTitle();
         this.updateEditor();
     }
