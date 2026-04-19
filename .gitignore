@@ -3,3 +3,6 @@ go.sum
 .vscode
 *.db
 *.db-journal
+.aider*
+node_modules
+dist

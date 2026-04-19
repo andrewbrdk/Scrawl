@@ -17,7 +17,7 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
-//go:embed index.html style.css
+//go:embed dist
 var embedded embed.FS
 
 var jwtSecretKey []byte
@@ -439,7 +439,7 @@ type Response struct {
 
 func httpServer() {
 	http.HandleFunc("/", httpIndex)
-	http.Handle("/style.css", http.FileServer(http.FS(embedded)))
+	http.Handle("/dist/", http.FileServer(http.FS(embedded)))
 	http.HandleFunc("/login", httpLogin)
 	http.HandleFunc("/pages", httpPages)
 	http.HandleFunc("/page", httpPage)
@@ -452,7 +452,7 @@ func httpServer() {
 }
 
 func httpIndex(w http.ResponseWriter, r *http.Request) {
-	data, err := embedded.ReadFile("index.html")
+	data, err := embedded.ReadFile("dist/index.html")
 	if err != nil {
 		http.Error(w, "Error loading the page", http.StatusInternalServerError)
 		return
