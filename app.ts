@@ -158,7 +158,73 @@ class XScrawl extends HTMLElement {
                         ['image'],
                         ['code-block'],
                         ['clean']
-                    ]
+                    ],
+                    keyboard: {
+                        bindings: {
+                            heading3: {
+                                key: ' ',
+                                prefix: /^###$/,
+                                handler(this: any, range: any) {
+                                    const lineStart = range.index - 3;
+                                    this.quill.deleteText(lineStart, 3);
+                                    this.quill.formatLine(lineStart, 1, 'header', 3);
+                                    return false;
+                                }
+                            },
+                            heading2: {
+                                key: ' ',
+                                prefix: /^##$/,
+                                handler(this: any, range: any) {
+                                    const lineStart = range.index - 2;
+                                    this.quill.deleteText(lineStart, 2);
+                                    this.quill.formatLine(lineStart, 1, 'header', 2);
+                                    return false;
+                                }
+                            },
+                            heading1: {
+                                key: ' ',
+                                prefix: /^#$/,
+                                handler(this: any, range: any) {
+                                    const lineStart = range.index - 1;
+                                    this.quill.deleteText(lineStart, 1);
+                                    this.quill.formatLine(lineStart, 1, 'header', 1);
+                                    return false;
+                                }
+                            },
+                            backtick: {                                                                                                                
+                                key: '`',                                                                                                              
+                                handler(this: any, range: any) {                                                                                       
+                                    const format = this.quill.getFormat(range.index);                                                                  
+                                    if (format.code) {                                                                                                 
+                                        let pos = range.index;                                                                                         
+                                        while (this.quill.getFormat(pos).code) {                                                                       
+                                            pos++;                                                                                                     
+                                        }                                                                                                               
+                                        this.quill.insertText(pos - 1, ' ', { code: false });                                                                            
+                                        this.quill.setSelection(pos, 0);                                                                              
+                                        return false;                                                                                                  
+                                    }                                                                                                                  
+                                    const textBefore = this.quill.getText(0, range.index);                                                             
+                                    const lineStart = textBefore.lastIndexOf('\n') + 1;                                                                
+                                    const lineText = textBefore.slice(lineStart);                                                                      
+                                    if (lineText === '`') {                                                                                            
+                                        this.quill.deleteText(lineStart, 1);                                                                           
+                                        this.quill.formatLine(lineStart, 1, 'code-block', true);                                                       
+                                        return false;                                                                                                  
+                                    }                                                                                                                  
+                                    if (lineText.endsWith('`')) {                                                                                      
+                                        const openingPos = textBefore.lastIndexOf('`');                                                                
+                                        this.quill.deleteText(openingPos, 1);                                                                          
+                                        this.quill.insertText(openingPos, '  ', { code: true });                                                       
+                                        this.quill.formatText(openingPos + 2, 1, { code: false });                                                     
+                                        this.quill.setSelection(openingPos + 1, 0);                                                                    
+                                        return false;                                                                                                  
+                                    }                                                                                                                  
+                                    return true;                                                                                                       
+                                }                                                                                                                      
+                            },                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               
+                        }
+                    }
                 },
                 theme: "bubble"
             });
