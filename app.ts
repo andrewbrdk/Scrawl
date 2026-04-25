@@ -167,75 +167,10 @@ class XScrawl extends HTMLElement {
                         ['formula'],
                         ['clean']
                     ],
-                    keyboard: {
-                        bindings: {
-                            heading3: {
-                                key: ' ',
-                                prefix: /^###$/,
-                                handler(this: any, range: any) {
-                                    const lineStart = range.index - 3;
-                                    this.quill.deleteText(lineStart, 3);
-                                    this.quill.formatLine(lineStart, 1, 'header', 3);
-                                    return false;
-                                }
-                            },
-                            heading2: {
-                                key: ' ',
-                                prefix: /^##$/,
-                                handler(this: any, range: any) {
-                                    const lineStart = range.index - 2;
-                                    this.quill.deleteText(lineStart, 2);
-                                    this.quill.formatLine(lineStart, 1, 'header', 2);
-                                    return false;
-                                }
-                            },
-                            heading1: {
-                                key: ' ',
-                                prefix: /^#$/,
-                                handler(this: any, range: any) {
-                                    const lineStart = range.index - 1;
-                                    this.quill.deleteText(lineStart, 1);
-                                    this.quill.formatLine(lineStart, 1, 'header', 1);
-                                    return false;
-                                }
-                            },
-                            backtick: {
-                                key: '`',
-                                handler(this: any, range: any) {
-                                    const format = this.quill.getFormat(range.index);
-                                    if (format.code) {
-                                        let pos = range.index;
-                                        while (this.quill.getFormat(pos).code) {
-                                            pos++;
-                                        }
-                                        this.quill.insertText(pos - 1, ' ', { code: false });
-                                        this.quill.setSelection(pos, 0);
-                                        return false;
-                                    }
-                                    const textBefore = this.quill.getText(0, range.index);
-                                    const lineStart = textBefore.lastIndexOf('\n') + 1;
-                                    const lineText = textBefore.slice(lineStart);
-                                    if (lineText === '`') {
-                                        this.quill.deleteText(lineStart, 1);
-                                        this.quill.formatLine(lineStart, 1, 'code-block', true);
-                                        return false;
-                                    }
-                                    if (lineText.endsWith('`')) {
-                                        const openingPos = textBefore.lastIndexOf('`');
-                                        this.quill.deleteText(openingPos, 1);
-                                        this.quill.insertText(openingPos, '  ', { code: true });
-                                        this.quill.formatText(openingPos + 2, 1, { code: false });
-                                        this.quill.setSelection(openingPos + 1, 0);
-                                        return false;
-                                    }
-                                    return true;
-                                }
-                            },                                                                                             
-                        }
-                    }
                 },
                 theme: "bubble"
             });
+            createMarkdownEngine(this.#quill);
             let saveTimer: ReturnType<typeof setTimeout> | null = null;
             this.#quill.on("text-change", () => {
                 if (saveTimer) clearTimeout(saveTimer);
@@ -620,6 +555,246 @@ class XScrawl extends HTMLElement {
         this.render();
     }
 }
+
+type Context = {
+    cursor: number;
+    lineStart: number;
+    lineText: string;
+    symbol?: string;
+};
+
+type Rule = {
+    name: string;
+    shouldRun: (ctx: Context) => boolean;
+    run: (quill: any, ctx: Context) => void;
+};
+
+export function createMarkdownEngine(quill: any) {
+    const rules: Rule[] = [
+        escapeStarRule,
+        escapeBacktickRule,
+        heading3Rule,
+        heading2Rule,
+        heading1Rule,
+        listRule,
+        boldRule,
+        inlineCodeRule,
+        codeBlockRule,
+    ];
+
+    quill.on('text-change', (delta: any, _old: any, source: string) => {
+        if (source !== 'user') return;
+
+        let symbol: string | undefined;
+
+        for (const op of delta.ops || []) {
+            if (typeof op.insert === 'string' && op.insert.length > 0) {
+                symbol = op.insert[op.insert.length - 1];
+            }
+        }
+        if (!symbol || !['*', ' ', '`'].includes(symbol)) return;
+
+        const sel = quill.getSelection();
+        if (!sel) return;
+
+        const cursor = sel.index;
+        const textBefore = quill.getText(0, cursor);
+        const lineStart = textBefore.lastIndexOf('\n') + 1;
+        const lineText = textBefore.slice(lineStart);
+        const ctx: Context = {
+            cursor,
+            lineStart,
+            lineText,
+            symbol,
+        };
+        
+        for (const rule of rules) {
+            if (rule.shouldRun(ctx)) {
+                rule.run(quill, ctx);
+                break;
+            }
+        }
+    });
+}
+
+const escapeStarRule: Rule = {
+    name: 'escape-star',
+
+    shouldRun: (ctx) => {
+        const t = ctx.lineText;
+        return t.length >= 2 &&
+        t[t.length - 2] === '\\' &&
+        t[t.length - 1] === '*';
+    },
+
+    run: (quill, ctx) => {
+        quill.deleteText(ctx.cursor - 2, 1);
+        quill.setSelection(ctx.cursor - 1, 0);
+    }
+};
+
+const escapeBacktickRule: Rule = {
+    name: 'escape-backtick',
+
+    shouldRun: (ctx) => {
+        const t = ctx.lineText;
+        return t.length >= 2 &&
+        t[t.length - 2] === '\\' &&
+        t[t.length - 1] === '`';
+    },
+
+    run: (quill, ctx) => {
+        quill.deleteText(ctx.cursor - 2, 1);
+        quill.setSelection(ctx.cursor - 1, 0);
+    }
+};
+
+const heading3Rule: Rule = {
+    name: 'heading3',
+
+    shouldRun: (ctx) => {
+        return ctx.lineText === '### ';
+    },
+
+    run: (quill, ctx) => {
+        quill.deleteText(ctx.lineStart, 4); // "### "
+        quill.formatLine(ctx.lineStart, 1, 'header', 3);
+    }
+};
+
+const heading2Rule: Rule = {
+    name: 'heading2',
+
+    shouldRun: (ctx) => {
+        return ctx.lineText === '## ';
+    },
+
+    run: (quill, ctx) => {
+        quill.deleteText(ctx.lineStart, 3); // "## "
+        quill.formatLine(ctx.lineStart, 1, 'header', 2);
+    }
+};
+
+const heading1Rule: Rule = {
+    name: 'heading1',
+
+    shouldRun: (ctx) => {
+        return ctx.lineText === '# ';
+    },
+
+    run: (quill, ctx) => {
+        quill.deleteText(ctx.lineStart, 2); // "# "
+        quill.formatLine(ctx.lineStart, 1, 'header', 1);
+    }
+};
+
+const listRule: Rule = {
+    name: 'list',
+
+    shouldRun: (ctx) => {
+        return ctx.lineText === '* ';
+    },
+
+    run: (quill, ctx) => {
+        quill.deleteText(ctx.lineStart, 2);
+        quill.formatLine(ctx.lineStart, 1, 'list', 'bullet');
+    }
+};
+
+const boldRule: Rule = {
+    name: 'bold',
+
+    shouldRun: (ctx) => {
+        const text = ctx.lineText;
+
+        if (text.length < 3) return false;
+        if (text[text.length - 1] !== '*') return false;
+
+        // find previous "*"
+        let i = text.length - 2;
+        while (i >= 0) {
+            if (text[i] === '*') break;
+            i--;
+        }
+
+        if (i < 0) return false;
+
+        const contentLength = text.length - i - 2;
+        return contentLength > 0;
+    },
+
+    run: (quill, ctx) => {
+        const text = ctx.lineText;
+
+        // find opening "*"
+        let i = text.length - 2;
+        while (i >= 0) {
+            if (text[i] === '*') break;
+            i--;
+        }
+
+        const startOffset = i;
+        const contentLength = text.length - i - 2;
+
+        const absStart = ctx.lineStart + startOffset;
+        const end = ctx.cursor - 1;
+        quill.deleteText(end, 1);
+        quill.deleteText(absStart, 1);
+        quill.formatText(absStart, contentLength, 'bold', true);
+        quill.setSelection(absStart + contentLength, 0);
+        quill.format('bold', false);
+    }
+};
+
+const inlineCodeRule: Rule = {
+    name: 'inline-code',
+
+    shouldRun: (ctx) => {
+        const text = ctx.lineText;
+        if (text.length < 3) return false;
+        if (text[text.length - 1] !== '`') return false;
+        let i = text.length - 2;
+        while (i >= 0) {
+            if (text[i] === '`') break;
+            i--;
+        }
+        if (i < 0) return false;
+        const contentLength = text.length - i - 2;
+        return contentLength > 0;
+    },
+
+    run: (quill, ctx) => {
+        const text = ctx.lineText;
+        let i = text.length - 2;
+        while (i >= 0) {
+            if (text[i] === '`') break;
+            i--;
+        }
+        const startOffset = i;
+        const contentLength = text.length - i - 2;
+        const absStart = ctx.lineStart + startOffset;
+        const end = ctx.cursor - 1;
+        quill.deleteText(end, 1);
+        quill.deleteText(absStart, 1);
+        quill.formatText(absStart, contentLength, 'code', true);
+        const newCursor = absStart + contentLength;
+        quill.setSelection(newCursor, 0);
+        quill.format('code', false);
+    }
+};
+
+const codeBlockRule: Rule = {
+    name: 'code-block',
+
+    shouldRun: (ctx) => {
+        return ctx.symbol === '`' && ctx.lineText === '';
+    },
+
+    run: (quill, ctx) => {
+        quill.deleteText(ctx.cursor, 1);
+        quill.formatLine(ctx.lineStart, 1, 'code-block', true);
+    }
+};
 
 function escapeHTML(str: string): string {
     const div = document.createElement('div');
