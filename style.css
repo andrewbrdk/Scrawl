@@ -373,3 +373,35 @@ x-scrawl {
 .page-row.dragging .drag-handle {
     cursor: grabbing;
 }
+
+.ql-math-block {
+    margin: 1rem 0;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 4px;
+    cursor: pointer;
+    text-align: center;
+}
+
+.ql-math-block:hover {
+    background: #f0f2f5;
+}
+
+.math-editor {
+    width: 100%;
+    border: 1px solid #ccc;
+    padding: 8px;
+    font-family: monospace;
+    font-size: 1.1rem;
+    outline: none;
+    resize: none;
+    display: block;
+    box-sizing: border-box;
+}
+
+.math-container {
+    min-height: 24px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
