@@ -62,6 +62,98 @@ export function markdownBehaviour(quill: any) {
             }
         }
     });
+
+    // quill.keyboard.addBinding({ key: 'ArrowRight' }, (range: any) => {                                                         
+    //     const [line, offset] = quill.getLine(range.index);                                                                     
+    //     const isEndOfLine = offset === line.length() - 1;                                                                      
+    //     if (isEndOfLine) {                                                                                                     
+    //         const nextBlot = line.next;                                                                                        
+    //         if (nextBlot instanceof MathBlock) {                                                                               
+    //             const node = nextBlot.domNode as HTMLElement;                                                                  
+    //             const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                    
+    //             textarea.focus();                                                                                              
+    //             textarea.setSelectionRange(0, 0);                                                                              
+    //             return false;                                                                                                  
+    //         }                                                                                                                  
+    //     }                                                                                                                      
+    //     return true;                                                                                                           
+    // }); 
+    quill.keyboard.addBinding({ key: 'ArrowRight' }, (range: any) => {
+        if (!range) return true;
+        const [line, offset] = quill.getLine(range.index);
+        if (!line) return true;
+        const isEndOfLine = offset >= line.length() - 1;
+        if (!isEndOfLine) return true;
+        const nextIndex = range.index + 1;
+        const [nextBlot] = quill.getLeaf(nextIndex);                                                                           
+        if (nextBlot instanceof MathBlock) {
+            const node = nextBlot.domNode as HTMLElement;
+            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
+            if (textarea) {
+                requestAnimationFrame(() => {
+                    textarea.focus();
+                    textarea.setSelectionRange(0, 0);
+                });
+                return false;
+            }
+        }
+        return true;
+    });                                                                                                                      
+                                                                                                                            
+    // quill.keyboard.addBinding({ key: 'ArrowDown' }, (range: any) => {                                                          
+    //     const [blot] = quill.getLeaf(range.index + 1);                                                                         
+    //     if (blot instanceof MathBlock) {                                                                                       
+    //         const node = blot.domNode as HTMLElement;                                                                          
+    //         const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                        
+    //         textarea.focus();                                                                                                  
+    //         textarea.setSelectionRange(0, 0);                                                                                  
+    //         return false;                                                                                                      
+    //     }                                                                                                                      
+    //     return true;                                                                                                           
+    // });   
+    quill.keyboard.addBinding({ key: 'ArrowDown' }, (range: any) => {
+        if (!range) return true;
+        const [currentLine, offset] = quill.getLine(range.index);
+        if (!currentLine) return true;
+        const nextIndex = range.index + (currentLine.length() - offset);
+        const [nextLine] = quill.getLine(nextIndex);
+        if (nextLine instanceof MathBlock) {
+            const node = nextLine.domNode as HTMLElement;
+            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
+            if (textarea) {
+                requestAnimationFrame(() => {
+                    textarea.focus();
+                    textarea.setSelectionRange(0, 0);
+                });
+                return false;
+            }
+        }
+        return true;
+    });                                                                                                                     
+                                                                                                                            
+    quill.keyboard.addBinding({ key: 'ArrowLeft' }, (range: any) => {                                                          
+        const [blot] = quill.getLeaf(range.index - 1);                                                                         
+        if (blot instanceof MathBlock) {                                                                                       
+            const node = blot.domNode as HTMLElement;                                                                          
+            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                        
+            textarea.focus();                                                                                                  
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);                                          
+            return false;                                                                                                      
+        }                                                                                                                      
+        return true;                                                                                                           
+    });                                                                                                                        
+                                                                                                                            
+    quill.keyboard.addBinding({ key: 'ArrowUp' }, (range: any) => {                                                            
+        const [blot] = quill.getLeaf(range.index - 1);                                                                         
+        if (blot instanceof MathBlock) {                                                                                       
+            const node = blot.domNode as HTMLElement;                                                                          
+            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                        
+            textarea.focus();                                                                                                  
+            textarea.setSelectionRange(textarea.value.length, textarea.value.length);                                          
+            return false;                                                                                                      
+        }                                                                                                                      
+        return true;                                                                                                           
+    }); 
 }
 
 const escapeStarRule: Rule = {
@@ -312,8 +404,38 @@ class MathBlock extends BlockEmbed {
 
         textarea.addEventListener('mousedown', (e) => e.stopPropagation());
         textarea.addEventListener('click', (e) => e.stopPropagation());
-        textarea.addEventListener('keydown', (e) => e.stopPropagation());                                                          
-        textarea.addEventListener('keyup', (e) => e.stopPropagation());                                                            
+        textarea.addEventListener('keyup', (e) => e.stopPropagation());
+        textarea.addEventListener('keydown', (e) => {                                                                              
+            e.stopPropagation();                                                                                                   
+            if (e.key === 'Escape') {                                                                                              
+                const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);                                      
+                if (quillInstance) {                                                                                               
+                    const blot = Quill.find(node);                                                                                 
+                    const index = (quillInstance as any).getIndex(blot);                                                           
+                    (quillInstance as any).setSelection(index + 1, 0, 'user');                                                     
+                }                                                                                                                  
+            }
+            if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {                                                                                               
+                if (textarea.selectionStart === textarea.value.length) {                                                               
+                    const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);                                      
+                    if (quillInstance) {                                                                                               
+                        const blot = Quill.find(node);                                                                                 
+                        const index = (quillInstance as any).getIndex(blot);                                                           
+                        (quillInstance as any).setSelection(index + 1, 0, 'user');                                                     
+                    }                                                                                                                  
+                }                                                                                                                      
+            }
+            if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {                                                                        
+                if (textarea.selectionStart === 0) {                                                                                   
+                    const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);                                      
+                    if (quillInstance) {                                                                                               
+                        const blot = Quill.find(node);                                                                                 
+                        const index = (quillInstance as any).getIndex(blot);                                                           
+                        (quillInstance as any).setSelection(index, 0, 'user');                                                         
+                    }                                                                                                                  
+                }                                                                                                                      
+            }                                                                                                                
+        });                                                        
 
         textarea.addEventListener('input', (e) => {  
             textarea.style.height = 'auto';                                                                                        
