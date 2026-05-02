@@ -41,19 +41,18 @@ export function markdownBehaviour(quill: any) {
         }
         if (!symbol || !['*', ' ', '`', '$'].includes(symbol)) return;
 
-        const sel = quill.getSelection();
-        if (!sel) return;
-
-        const cursor = sel.index;
-        const textBefore = quill.getText(0, cursor);
-        const lineStart = textBefore.lastIndexOf('\n') + 1;
-        const lineText = textBefore.slice(lineStart);
-        const ctx: Context = {
-            cursor,
-            lineStart,
-            lineText,
-            symbol,
-        };
+        const range = quill.getSelection();                                                                                    
+        if (!range) return;                                                                                                                                                                                                                
+        const [line, offset] = quill.getLine(range.index);                                                                                                                                                                                     
+        const lineStart = range.index - offset;                                                                                
+        const lineText = quill.getText(lineStart, offset);                                                                     
+                                                                                                                            
+        const ctx: Context = {                                                                                                 
+            cursor: range.index,                                                                                               
+            lineStart,                                                                                                         
+            lineText,                                                                                                          
+            symbol,                                                                                                            
+        }; 
 
         for (const rule of rules) {
             if (rule.shouldRun(ctx)) {
@@ -250,104 +249,47 @@ const mathBlockRule: Rule = {
 
     run: (quill, ctx) => {
         quill.deleteText(ctx.cursor, 1);
-        quill.insertEmbed(ctx.lineStart, 'math-block', { latex: '', mode: 'edit' }, 'user');
-        quill.setSelection(ctx.lineStart + 1, 0);
+        quill.insertEmbed(
+            ctx.lineStart,
+            'math-block',
+            { latex: '' },
+            'user'
+        );
+        quill.setSelection(ctx.lineStart + 1, 0, 'silent');
     }
 };
 
 
 const BlockEmbed = Quill.import('blots/block/embed') as any;
 
-class MathBlock extends BlockEmbed {
-    static blotName = 'math-block';
-    static tagName = 'div';
-    static className = 'ql-math-block';
-
-    static create(value: { latex: string; mode?: string }) {
-        const node = super.create();
-        node.setAttribute('data-value', value.latex || '');
-        node.setAttribute('contenteditable', 'false');
-        if (value.mode === 'edit') {
-            node.setAttribute('data-pending-edit', 'true');
-        }
-        MathBlock.renderKatex(node, value.latex || '');
-        return node;
-    }
-
-    static renderKatex(node: HTMLElement, latex: string) {
-        node.innerHTML = '';
-        if (latex.trim()) {
-            katex.render(latex, node, { throwOnError: false });
-        } else {
-            node.innerHTML = '<span class="math-empty">Empty equation</span>';
-        }
-    }
-
-    static value(node: HTMLElement) {
-        const textarea = node.querySelector('textarea');
-        return { latex: textarea ? textarea.value : node.getAttribute('data-value') || '' };
-    }
-
-    attach() {
-        super.attach();
-        const node = this.domNode;
-        const quill = Quill.find(node.closest('.ql-container')) as any;
-
-        node.onclick = () => {
-            if (node.getAttribute('data-mode') !== 'edit') {
-                this.enterEditMode(quill);
-            }
-        };
-
-        if (node.getAttribute('data-pending-edit') === 'true') {
-            node.removeAttribute('data-pending-edit');
-            setTimeout(() => this.enterEditMode(quill), 0);
-        }
-    }
-
-    enterEditMode(quill: any) {
-        const node = this.domNode;
-        const latex = node.getAttribute('data-value') || '';
-        node.setAttribute('data-mode', 'edit');
-        node.innerHTML = `<textarea class="math-editor" placeholder="LaTeX...">${latex}</textarea>`;
-
-        const textarea = node.querySelector('textarea')!;
-
-        const resize = () => {
-            textarea.style.height = 'auto';
-            textarea.style.height = textarea.scrollHeight + 'px';
-        };
-
-        textarea.oninput = resize;
-
-        setTimeout(() => {
-            textarea.focus();
-            textarea.setSelectionRange(latex.length, latex.length);
-            resize();
-        }, 0);
-
-        const commit = () => {
-            if (node.getAttribute('data-mode') !== 'edit') return;
-            const value = textarea.value;
-            node.setAttribute('data-value', value);
-            node.setAttribute('data-mode', 'render');
-            MathBlock.renderKatex(node, value);
-            const blot = Quill.find(node);
-            if (blot && quill) {
-                quill.setSelection(quill.getIndex(blot) + 1, 0, 'silent');
-            }
-        };
-
-        textarea.onkeydown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                commit();
-            }
-        };
-
-        textarea.onblur = commit;
-    }
-}
+class MathBlock extends BlockEmbed {                                                                                       
+    static blotName = 'math-block';                                                                                        
+    static tagName = 'div';                                                                                                
+    static className = 'ql-math-block';                                                                                    
+                                                                                                                           
+    static create(value: { latex: string }) {                                                                              
+        const node = super.create() as HTMLElement;                                                                        
+        node.setAttribute('contenteditable', 'false');                                                                     
+                                                                                                                           
+        const textarea = document.createElement('textarea');                                                               
+        textarea.className = 'math-editor';                                                                                
+        textarea.value = value?.latex || 'x^2';                                                                            
+                                                                                                                           
+        const preview = document.createElement('div');                                                                     
+        preview.className = 'math-preview';                                                                                
+        katex.render(textarea.value, preview, { throwOnError: false });                                                    
+       
+        node.appendChild(preview);  
+        node.appendChild(textarea);                                                                                                                                                                              
+                                                                                                                           
+        return node;                                                                                                       
+    }                                                                                                                      
+                                                                                                                           
+    static value(node: HTMLElement) {                                                                                      
+        const textarea = node.querySelector('textarea');                                                                   
+        return { latex: textarea?.value || '' };                                                                           
+    }                                                                                                                      
+} 
 
 
 let registered = false;

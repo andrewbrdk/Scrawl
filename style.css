@@ -374,34 +374,26 @@ x-scrawl {
     cursor: grabbing;
 }
 
-.ql-math-block {
-    margin: 1rem 0;
-    padding: 10px;
-    background: #f8f9fa;
-    border-radius: 4px;
-    cursor: pointer;
-    text-align: center;
-}
-
-.ql-math-block:hover {
-    background: #f0f2f5;
-}
-
-.math-editor {
-    width: 100%;
-    border: 1px solid #ccc;
-    padding: 8px;
-    font-family: monospace;
-    font-size: 1.1rem;
-    outline: none;
-    resize: none;
-    display: block;
-    box-sizing: border-box;
-}
-
-.math-container {
-    min-height: 24px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
+.ql-math-block {                                                                                                           
+    margin: 1rem 0;                                                                                                        
+    border: 1px dashed #aaa;                                                                                               
+    border-radius: 4px;                                                                                                    
+    padding: 0.5rem;                                                                                                       
+}                                                                                                                          
+                                                                                                                           
+.math-preview {                                                                                                            
+    text-align: center;                                                                                                    
+    padding: 0.5rem 0;                                                                                                     
+    border-bottom: 1px solid #ddd;                                                                                         
+}                                                                                                                          
+                                                                                                                           
+.math-editor {                                                                                                             
+    width: 100%;                                                                                                           
+    font-family: monospace;                                                                                                
+    font-size: 1rem;                                                                                                       
+    border: none;                                                                                                          
+    outline: none;                                                                                                         
+    resize: none;                                                                                                          
+    box-sizing: border-box;                                                                                                
+    background: transparent;                                                                                               
+}  
