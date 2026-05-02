@@ -41,18 +41,19 @@ export function markdownBehaviour(quill: any) {
         }
         if (!symbol || !['*', ' ', '`', '$'].includes(symbol)) return;
 
-        const range = quill.getSelection();                                                                                    
-        if (!range) return;                                                                                                                                                                                                                
-        const [line, offset] = quill.getLine(range.index);                                                                                                                                                                                     
-        const lineStart = range.index - offset;                                                                                
-        const lineText = quill.getText(lineStart, offset);                                                                     
-                                                                                                                            
-        const ctx: Context = {                                                                                                 
-            cursor: range.index,                                                                                               
-            lineStart,                                                                                                         
-            lineText,                                                                                                          
-            symbol,                                                                                                            
-        }; 
+        const range = quill.getSelection();
+        if (!range) return;
+
+        const [line, offset] = quill.getLine(range.index);
+        const lineStart = range.index - offset;
+        const lineText = quill.getText(lineStart, offset);
+
+        const ctx: Context = {
+            cursor: range.index,
+            lineStart,
+            lineText,
+            symbol,
+        };
 
         for (const rule of rules) {
             if (rule.shouldRun(ctx)) {
@@ -262,34 +263,77 @@ const mathBlockRule: Rule = {
 
 const BlockEmbed = Quill.import('blots/block/embed') as any;
 
-class MathBlock extends BlockEmbed {                                                                                       
-    static blotName = 'math-block';                                                                                        
-    static tagName = 'div';                                                                                                
-    static className = 'ql-math-block';                                                                                    
-                                                                                                                           
-    static create(value: { latex: string }) {                                                                              
-        const node = super.create() as HTMLElement;                                                                        
-        node.setAttribute('contenteditable', 'false');                                                                     
-                                                                                                                           
-        const textarea = document.createElement('textarea');                                                               
-        textarea.className = 'math-editor';                                                                                
-        textarea.value = value?.latex || 'x^2';                                                                            
-                                                                                                                           
-        const preview = document.createElement('div');                                                                     
-        preview.className = 'math-preview';                                                                                
-        katex.render(textarea.value, preview, { throwOnError: false });                                                    
-       
-        node.appendChild(preview);  
-        node.appendChild(textarea);                                                                                                                                                                              
-                                                                                                                           
-        return node;                                                                                                       
-    }                                                                                                                      
-                                                                                                                           
-    static value(node: HTMLElement) {                                                                                      
-        const textarea = node.querySelector('textarea');                                                                   
-        return { latex: textarea?.value || '' };                                                                           
-    }                                                                                                                      
-} 
+class MathBlock extends BlockEmbed {
+    static blotName = 'math-block';
+    static tagName = 'div';
+    static className = 'ql-math-block';
+
+    static create(value: { latex: string }) {
+        const node = super.create() as HTMLElement;
+        const latex = value?.latex || '';
+        node.dataset.latex = latex;
+        node.setAttribute('contenteditable', 'false');
+
+        const preview = document.createElement('div');
+        preview.className = 'math-preview';
+        MathBlock.render(preview, latex);
+
+        const textarea = document.createElement('textarea');
+        textarea.className = 'math-editor';
+        textarea.value = latex;
+
+        node.appendChild(preview);
+        node.appendChild(textarea);
+
+        return node;
+    }
+
+    static value(node: HTMLElement) {
+         return { latex: node.dataset.latex || '' };
+    }
+
+    static render(container: HTMLElement, latex: string) {
+        try {
+            katex.render(latex, container, { throwOnError: false });
+        } catch {
+            container.innerText = latex;
+        }
+    }
+
+    attach() {
+        super.attach();
+
+        const node = this.domNode as HTMLElement;
+        const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
+        const preview = node.querySelector('.math-preview') as HTMLElement;
+        if (!textarea || !preview) return;
+        textarea.style.height = 'auto';                                                                                        
+        textarea.style.height = textarea.scrollHeight + 'px';
+
+        textarea.addEventListener('mousedown', (e) => e.stopPropagation());
+        textarea.addEventListener('click', (e) => e.stopPropagation());
+        textarea.addEventListener('keydown', (e) => e.stopPropagation());                                                          
+        textarea.addEventListener('keyup', (e) => e.stopPropagation());                                                            
+
+        textarea.addEventListener('input', (e) => {  
+            textarea.style.height = 'auto';                                                                                        
+            textarea.style.height = textarea.scrollHeight + 'px';  
+            node.dataset.latex = textarea.value;                                                                                   
+            MathBlock.render(preview, textarea.value);                                                                             
+            const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);                                          
+            if (quillInstance) {                                                                                                   
+                (quillInstance as any).update('user');                                                                             
+            }                                                                                                                      
+        }); 
+
+        if (!textarea.value) {
+            requestAnimationFrame(() => {
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            });
+        }
+    }
+}
 
 
 let registered = false;

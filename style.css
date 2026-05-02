@@ -395,5 +395,6 @@ x-scrawl {
     outline: none;                                                                                                         
     resize: none;                                                                                                          
     box-sizing: border-box;                                                                                                
-    background: transparent;                                                                                               
+    background: transparent;
+	overflow: hidden;                                                                                             
 }  
