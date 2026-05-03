@@ -63,54 +63,18 @@ export function markdownBehaviour(quill: any) {
         }
     });
 
-    // quill.keyboard.addBinding({ key: 'ArrowRight' }, (range: any) => {                                                         
-    //     const [line, offset] = quill.getLine(range.index);                                                                     
-    //     const isEndOfLine = offset === line.length() - 1;                                                                      
-    //     if (isEndOfLine) {                                                                                                     
-    //         const nextBlot = line.next;                                                                                        
-    //         if (nextBlot instanceof MathBlock) {                                                                               
-    //             const node = nextBlot.domNode as HTMLElement;                                                                  
-    //             const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                    
-    //             textarea.focus();                                                                                              
-    //             textarea.setSelectionRange(0, 0);                                                                              
-    //             return false;                                                                                                  
-    //         }                                                                                                                  
-    //     }                                                                                                                      
-    //     return true;                                                                                                           
-    // }); 
-    quill.keyboard.addBinding({ key: 'ArrowRight' }, (range: any) => {
-        if (!range) return true;
-        const [line, offset] = quill.getLine(range.index);
-        if (!line) return true;
-        const isEndOfLine = offset >= line.length() - 1;
-        if (!isEndOfLine) return true;
-        const nextIndex = range.index + 1;
-        const [nextBlot] = quill.getLeaf(nextIndex);                                                                           
-        if (nextBlot instanceof MathBlock) {
-            const node = nextBlot.domNode as HTMLElement;
-            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
-            if (textarea) {
-                requestAnimationFrame(() => {
-                    textarea.focus();
-                    textarea.setSelectionRange(0, 0);
-                });
-                return false;
-            }
-        }
-        return true;
-    });                                                                                                                      
-                                                                                                                            
-    // quill.keyboard.addBinding({ key: 'ArrowDown' }, (range: any) => {                                                          
-    //     const [blot] = quill.getLeaf(range.index + 1);                                                                         
-    //     if (blot instanceof MathBlock) {                                                                                       
-    //         const node = blot.domNode as HTMLElement;                                                                          
-    //         const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                        
-    //         textarea.focus();                                                                                                  
-    //         textarea.setSelectionRange(0, 0);                                                                                  
-    //         return false;                                                                                                      
-    //     }                                                                                                                      
-    //     return true;                                                                                                           
-    // });   
+    quill.on('selection-change', (range: any, oldRange: any, source: any) => {
+        if (!range || range.length || source !== 'user') return;
+        const [line] = quill.getLine(range.index);
+        if (!(line instanceof MathBlock)) return;
+        const textarea = line.domNode.querySelector('.math-editor');
+        if (!textarea || document.activeElement === textarea) return;
+        requestAnimationFrame(() => {
+            textarea.focus();
+            textarea.setSelectionRange(0, 0);
+        });
+    });
+
     quill.keyboard.addBinding({ key: 'ArrowDown' }, (range: any) => {
         if (!range) return true;
         const [currentLine, offset] = quill.getLine(range.index);
@@ -130,30 +94,52 @@ export function markdownBehaviour(quill: any) {
         }
         return true;
     });                                                                                                                     
+
+    quill.keyboard.addBinding({ key: 'ArrowLeft' }, (range: any) => {
+        if (!range) return true;
+        const index = range.index;
+        const [prevLine] = quill.getLine(index - 1);
+        if (prevLine instanceof MathBlock) {
+            const node = prevLine.domNode as HTMLElement;
+            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
+            if (textarea) {
+                quill.setSelection(index - 1, 0, 'silent');
+                requestAnimationFrame(() => {
+                    textarea.focus();
+                    textarea.setSelectionRange(
+                        textarea.value.length,
+                        textarea.value.length
+                    );
+                });
+                return false;
+            }
+        }
+        return true;
+    });
                                                                                                                             
-    quill.keyboard.addBinding({ key: 'ArrowLeft' }, (range: any) => {                                                          
-        const [blot] = quill.getLeaf(range.index - 1);                                                                         
-        if (blot instanceof MathBlock) {                                                                                       
-            const node = blot.domNode as HTMLElement;                                                                          
-            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                        
-            textarea.focus();                                                                                                  
-            textarea.setSelectionRange(textarea.value.length, textarea.value.length);                                          
-            return false;                                                                                                      
-        }                                                                                                                      
-        return true;                                                                                                           
-    });                                                                                                                        
-                                                                                                                            
-    quill.keyboard.addBinding({ key: 'ArrowUp' }, (range: any) => {                                                            
-        const [blot] = quill.getLeaf(range.index - 1);                                                                         
-        if (blot instanceof MathBlock) {                                                                                       
-            const node = blot.domNode as HTMLElement;                                                                          
-            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                        
-            textarea.focus();                                                                                                  
-            textarea.setSelectionRange(textarea.value.length, textarea.value.length);                                          
-            return false;                                                                                                      
-        }                                                                                                                      
-        return true;                                                                                                           
-    }); 
+    quill.keyboard.addBinding({ key: 'ArrowUp' }, (range: any) => {
+        if (!range) return true;
+        const [currentLine, offset] = quill.getLine(range.index);
+        if (!currentLine) return true;
+        const prevIndex = range.index - offset - 1;
+        if (prevIndex < 0) return true;
+        const [prevLine] = quill.getLine(prevIndex);
+        if (prevLine instanceof MathBlock) {
+            const node = prevLine.domNode as HTMLElement;
+            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
+            if (textarea) {
+                requestAnimationFrame(() => {
+                    textarea.focus();
+                    textarea.setSelectionRange(
+                        textarea.value.length,
+                        textarea.value.length
+                    );
+                });
+                return false;
+            }
+        }
+        return true;
+    });
 }
 
 const escapeStarRule: Rule = {
@@ -421,7 +407,7 @@ class MathBlock extends BlockEmbed {
                     if (quillInstance) {                                                                                               
                         const blot = Quill.find(node);                                                                                 
                         const index = (quillInstance as any).getIndex(blot);                                                           
-                        (quillInstance as any).setSelection(index + 1, 0, 'user');                                                     
+                        (quillInstance as any).setSelection(index, 0, 'user');                                                     
                     }                                                                                                                  
                 }                                                                                                                      
             }
