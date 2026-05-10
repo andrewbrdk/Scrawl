@@ -19,6 +19,7 @@ export function markdownBehaviour(quill: any) {
     const rules: Rule[] = [
         escapeStarRule,
         escapeBacktickRule,
+        escapeDollarRule,
         heading3Rule,
         heading2Rule,
         heading1Rule,
@@ -26,6 +27,7 @@ export function markdownBehaviour(quill: any) {
         boldRule,
         inlineCodeRule,
         codeBlockRule,
+        mathInlineRule,
         mathBlockRule
     ];
 
@@ -67,7 +69,7 @@ export function markdownBehaviour(quill: any) {
         if (!range || range.length || source !== 'user') return;
         const [line] = quill.getLine(range.index);
         if (!(line instanceof MathBlock)) return;
-        const textarea = line.domNode.querySelector('.math-editor');
+        const textarea = line.domNode.querySelector('.math-editor') as HTMLTextAreaElement;
         if (!textarea || document.activeElement === textarea) return;
         line.expand();
         requestAnimationFrame(() => {
@@ -83,9 +85,9 @@ export function markdownBehaviour(quill: any) {
         const nextIndex = range.index + (currentLine.length() - offset);
         const [nextLine] = quill.getLine(nextIndex);
         if (nextLine instanceof MathBlock) {
-            const textarea = nextLine.domNode.querySelector('.math-editor') as HTMLTextAreaElement; 
+            const textarea = nextLine.domNode.querySelector('.math-editor') as HTMLTextAreaElement;
             if (textarea) {
-                nextLine.expand(); 
+                nextLine.expand();
                 requestAnimationFrame(() => {
                     textarea.focus();
                     textarea.setSelectionRange(0, 0);
@@ -94,31 +96,27 @@ export function markdownBehaviour(quill: any) {
             }
         }
         return true;
-    });                                                                                                                     
+    });
 
     quill.keyboard.addBinding({ key: 'ArrowLeft' }, (range: any) => {
         if (!range) return true;
         const index = range.index;
         const [prevLine] = quill.getLine(index - 1);
         if (prevLine instanceof MathBlock) {
-            const node = prevLine.domNode as HTMLElement;
-            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
+            const textarea = prevLine.domNode.querySelector('.math-editor') as HTMLTextAreaElement;
             if (textarea) {
                 prevLine.expand();
                 quill.setSelection(index - 1, 0, 'silent');
                 requestAnimationFrame(() => {
                     textarea.focus();
-                    textarea.setSelectionRange(
-                        textarea.value.length,
-                        textarea.value.length
-                    );
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
                 });
                 return false;
             }
         }
         return true;
     });
-                                                                                                                            
+
     quill.keyboard.addBinding({ key: 'ArrowUp' }, (range: any) => {
         if (!range) return true;
         const [currentLine, offset] = quill.getLine(range.index);
@@ -127,16 +125,12 @@ export function markdownBehaviour(quill: any) {
         if (prevIndex < 0) return true;
         const [prevLine] = quill.getLine(prevIndex);
         if (prevLine instanceof MathBlock) {
-            const node = prevLine.domNode as HTMLElement;
-            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
+            const textarea = prevLine.domNode.querySelector('.math-editor') as HTMLTextAreaElement;
             if (textarea) {
                 prevLine.expand();
                 requestAnimationFrame(() => {
                     textarea.focus();
-                    textarea.setSelectionRange(
-                        textarea.value.length,
-                        textarea.value.length
-                    );
+                    textarea.setSelectionRange(textarea.value.length, textarea.value.length);
                 });
                 return false;
             }
@@ -169,6 +163,22 @@ const escapeBacktickRule: Rule = {
         return t.length >= 2 &&
         t[t.length - 2] === '\\' &&
         t[t.length - 1] === '`';
+    },
+
+    run: (quill, ctx) => {
+        quill.deleteText(ctx.cursor - 2, 1);
+        quill.setSelection(ctx.cursor - 1, 0);
+    }
+};
+
+const escapeDollarRule: Rule = {
+    name: 'escape-dollar',
+
+    shouldRun: (ctx) => {
+        const t = ctx.lineText;
+        return t.length >= 2 &&
+        t[t.length - 2] === '\\' &&
+        t[t.length - 1] === '$';
     },
 
     run: (quill, ctx) => {
@@ -322,6 +332,40 @@ const codeBlockRule: Rule = {
     }
 };
 
+const mathInlineRule: Rule = {
+    name: 'math-inline',
+
+    shouldRun: (ctx) => {
+        if (ctx.symbol !== '$') return false;
+        const text = ctx.lineText;
+        if (text.length < 3) return false;
+        if (text[text.length - 1] !== '$') return false;
+        let i = text.length - 2;
+        while (i >= 0) {
+            if (text[i] === '$') break;
+            i--;
+        }
+        if (i < 0) return false;
+        const contentLength = text.length - i - 2;
+        return contentLength > 0;
+    },
+
+    run: (quill, ctx) => {
+        const text = ctx.lineText;
+        let i = text.length - 2;
+        while (i >= 0) {
+            if (text[i] === '$') break;
+            i--;
+        }
+        const contentLength = text.length - i - 2;
+        const latex = text.slice(i + 1, text.length - 1);
+        const absStart = ctx.lineStart + i;
+        quill.deleteText(absStart, contentLength + 2);
+        quill.insertEmbed(absStart, 'math-inline', { latex }, 'user');
+        quill.setSelection(absStart + 1, 0, 'user');
+    }
+};
+
 const mathBlockRule: Rule = {
     name: 'math-block',
 
@@ -343,6 +387,73 @@ const mathBlockRule: Rule = {
 
 
 const BlockEmbed = Quill.import('blots/block/embed') as any;
+const InlineEmbed = Quill.import('blots/embed') as any;
+
+class MathInline extends InlineEmbed {                                                                                     
+    static blotName = 'math-inline';                                                                                       
+    static tagName = 'span';                                                                                               
+    static className = 'ql-math-inline';                                                                                   
+                                                                                                                           
+    static create(value: { latex: string }) {                                                                              
+        const node = super.create() as HTMLElement;                                                                        
+        const latex = value?.latex || '';                                                                                  
+        node.dataset.latex = latex;                                                                                        
+        node.setAttribute('contenteditable', 'false');                                                                     
+                                                                                                                           
+        const preview = document.createElement('span');                                                                    
+        preview.className = 'math-inline-preview';                                                                         
+        MathInline.render(preview, latex);                                                                                 
+                                                                                                                           
+        const input = document.createElement('input');                                                                     
+        input.type = 'text';                                                                                               
+        input.className = 'math-inline-editor';                                                                            
+        input.value = latex;                                                                                               
+        input.hidden = true;                                                                                               
+                                                                                                                           
+        node.appendChild(input); 
+        node.appendChild(preview);                                                                                                                                                          
+                                                                                                                           
+        node.addEventListener('click', () => {                                                                             
+            input.hidden = false;                                                                                          
+            input.style.width = Math.max(input.value.length, 1) + 'ch';                                                    
+            input.focus();                                                                                                 
+            input.select();                                                                                                
+        });                                                                                                                
+                                                                                                                           
+        input.addEventListener('blur', () => {                                                                             
+            input.hidden = true;                                                                                           
+        });                                                                                                                
+                                                                                                                           
+        input.addEventListener('mousedown', (e) => e.stopPropagation());                                                   
+        input.addEventListener('click', (e) => e.stopPropagation());                                                       
+        input.addEventListener('keydown', (e) => {                                                                         
+            e.stopPropagation();                                                                                           
+            if (e.key === 'Escape' || e.key === 'Enter') {                                                                 
+                input.blur();                                                                                              
+            }                                                                                                              
+        });                                                                                                                
+                                                                                                                           
+        input.addEventListener('input', () => {                                                                            
+            input.style.width = Math.max(input.value.length, 1) + 'ch';                                                    
+            node.dataset.latex = input.value;                                                                              
+            MathInline.render(preview, input.value);                                                                       
+        });                                                                                                                
+                                                                                                                           
+        return node;                                                                                                       
+    }                                                                                                                      
+                                                                                                                           
+    static value(node: HTMLElement) {                                                                                      
+        return { latex: node.dataset.latex || '' };                                                                        
+    }                                                                                                                      
+                                                                                                                           
+    static render(container: HTMLElement, latex: string) {                                                                 
+        try {                                                                                                              
+            katex.render(latex, container, { throwOnError: false, displayMode: false });                                   
+        } catch {                                                                                                          
+            container.innerText = latex;                                                                                   
+        }                                                                                                                  
+    }                                                                                                                      
+} 
 
 class MathBlock extends BlockEmbed {
     static blotName = 'math-block';
@@ -371,7 +482,7 @@ class MathBlock extends BlockEmbed {
     }
 
     static value(node: HTMLElement) {
-         return { latex: node.dataset.latex || '' };
+        return { latex: node.dataset.latex || '' };
     }
 
     static render(container: HTMLElement, latex: string) {
@@ -382,14 +493,14 @@ class MathBlock extends BlockEmbed {
         }
     }
 
-    expand(): void {                                                                                                       
-        const node = this.domNode as HTMLElement;                                                                          
-        const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                        
-        if (!textarea) return;                                                                                             
-        node.classList.remove('math-collapsed');                                                                           
-        textarea.style.height = 'auto';                                                                                    
-        textarea.style.height = textarea.scrollHeight + 'px';                                                              
-    } 
+    expand(): void {
+        const node = this.domNode as HTMLElement;
+        const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
+        if (!textarea) return;
+        node.classList.remove('math-collapsed');
+        textarea.style.height = 'auto';
+        textarea.style.height = textarea.scrollHeight + 'px';
+    }
 
     attach() {
         super.attach();
@@ -399,65 +510,64 @@ class MathBlock extends BlockEmbed {
         const preview = node.querySelector('.math-preview') as HTMLElement;
         if (!textarea || !preview) return;
 
-        node.addEventListener('click', () => {                                                                                 
-            this.expand();                                                                         
-            requestAnimationFrame(() => {                                                                                      
-                textarea.focus();                                                                                              
-                textarea.setSelectionRange(textarea.value.length, textarea.value.length);                                      
-            });                                                                                                                
-        });                                                                                                                    
-                                                                                                                            
-        textarea.addEventListener('blur', () => {                                                                              
-            node.classList.add('math-collapsed');                                                                              
-        }); 
+        node.addEventListener('click', () => {
+            this.expand();
+            requestAnimationFrame(() => {
+                textarea.focus();
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);
+            });
+        });
+
+        textarea.addEventListener('blur', () => {
+            node.classList.add('math-collapsed');
+        });
 
         textarea.addEventListener('mousedown', (e) => e.stopPropagation());
         textarea.addEventListener('click', (e) => e.stopPropagation());
         textarea.addEventListener('keyup', (e) => e.stopPropagation());
-        textarea.addEventListener('keydown', (e) => {                                                                              
-            e.stopPropagation();                                                                                                   
-            if (e.key === 'Escape') {                                                                                              
-                const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);                                      
-                if (quillInstance) {                                                                                               
-                    const blot = Quill.find(node);                                                                                 
-                    const index = (quillInstance as any).getIndex(blot);                                                           
-                    (quillInstance as any).setSelection(index + 1, 0, 'user');                                                     
-                }                                                                                                                  
+        textarea.addEventListener('keydown', (e) => {
+            e.stopPropagation();
+            if (e.key === 'Escape') {
+                node.classList.add('math-collapsed');
+                const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);
+                if (quillInstance) {
+                    const blot = Quill.find(node);
+                    const index = (quillInstance as any).getIndex(blot);
+                    (quillInstance as any).setSelection(index + 1, 0, 'user');
+                }
             }
-            if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {                                                                                               
-                if (textarea.selectionStart === textarea.value.length) {                                                               
-                    const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);                                      
-                    if (quillInstance) {                                                                                               
-                        const blot = Quill.find(node);                                                                                 
+            if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                if (textarea.selectionStart === textarea.value.length) {
+                    const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);
+                    if (quillInstance) {
+                        const blot = Quill.find(node);
                         const index = (quillInstance as any).getIndex(blot);
-                        //todo: fix position on ArrowRight
-                        const pos = e.key === 'ArrowDown' ? index : index + 1;                                                    
-                        (quillInstance as any).setSelection(pos, 0, 'user');                                                     
-                    }                                                                                                                  
-                }                                                                                                                      
+                        (quillInstance as any).setSelection(index + 1, 0, 'user');
+                    }
+                }
             }
-            if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {                                                                        
-                if (textarea.selectionStart === 0) {                                                                                   
-                    const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);                                      
-                    if (quillInstance) {                                                                                               
-                        const blot = Quill.find(node);                                                                                 
-                        const index = (quillInstance as any).getIndex(blot);                                                           
-                        (quillInstance as any).setSelection(index, 0, 'user');                                                         
-                    }                                                                                                                  
-                }                                                                                                                      
-            }                                                                                                                
-        });                                                        
+            if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                if (textarea.selectionStart === 0) {
+                    const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);
+                    if (quillInstance) {
+                        const blot = Quill.find(node);
+                        const index = (quillInstance as any).getIndex(blot);
+                        (quillInstance as any).setSelection(index, 0, 'user');
+                    }
+                }
+            }
+        });
 
-        textarea.addEventListener('input', (e) => {  
-            textarea.style.height = 'auto';                                                                                        
-            textarea.style.height = textarea.scrollHeight + 'px';  
-            node.dataset.latex = textarea.value;                                                                                   
-            MathBlock.render(preview, textarea.value);                                                                             
-            const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);                                          
-            if (quillInstance) {                                                                                                   
-                (quillInstance as any).update('user');                                                                             
-            }                                                                                                                      
-        }); 
+        textarea.addEventListener('input', () => {
+            textarea.style.height = 'auto';
+            textarea.style.height = textarea.scrollHeight + 'px';
+            node.dataset.latex = textarea.value;
+            MathBlock.render(preview, textarea.value);
+            const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);
+            if (quillInstance) {
+                (quillInstance as any).update('user');
+            }
+        });
 
         if (!textarea.value) {
             this.expand();
@@ -476,6 +586,7 @@ export function setupQuill() {
     if (registered) return;
 
     Quill.register(MathBlock);
+    Quill.register(MathInline);
 
     registered = true;
 }
