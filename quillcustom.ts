@@ -69,6 +69,7 @@ export function markdownBehaviour(quill: any) {
         if (!(line instanceof MathBlock)) return;
         const textarea = line.domNode.querySelector('.math-editor');
         if (!textarea || document.activeElement === textarea) return;
+        line.expand();
         requestAnimationFrame(() => {
             textarea.focus();
             textarea.setSelectionRange(0, 0);
@@ -82,9 +83,9 @@ export function markdownBehaviour(quill: any) {
         const nextIndex = range.index + (currentLine.length() - offset);
         const [nextLine] = quill.getLine(nextIndex);
         if (nextLine instanceof MathBlock) {
-            const node = nextLine.domNode as HTMLElement;
-            const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
+            const textarea = nextLine.domNode.querySelector('.math-editor') as HTMLTextAreaElement; 
             if (textarea) {
+                nextLine.expand(); 
                 requestAnimationFrame(() => {
                     textarea.focus();
                     textarea.setSelectionRange(0, 0);
@@ -103,6 +104,7 @@ export function markdownBehaviour(quill: any) {
             const node = prevLine.domNode as HTMLElement;
             const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
             if (textarea) {
+                prevLine.expand();
                 quill.setSelection(index - 1, 0, 'silent');
                 requestAnimationFrame(() => {
                     textarea.focus();
@@ -128,6 +130,7 @@ export function markdownBehaviour(quill: any) {
             const node = prevLine.domNode as HTMLElement;
             const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
             if (textarea) {
+                prevLine.expand();
                 requestAnimationFrame(() => {
                     textarea.focus();
                     textarea.setSelectionRange(
@@ -362,6 +365,7 @@ class MathBlock extends BlockEmbed {
 
         node.appendChild(preview);
         node.appendChild(textarea);
+        node.classList.add('math-collapsed');
 
         return node;
     }
@@ -378,6 +382,15 @@ class MathBlock extends BlockEmbed {
         }
     }
 
+    expand(): void {                                                                                                       
+        const node = this.domNode as HTMLElement;                                                                          
+        const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;                                        
+        if (!textarea) return;                                                                                             
+        node.classList.remove('math-collapsed');                                                                           
+        textarea.style.height = 'auto';                                                                                    
+        textarea.style.height = textarea.scrollHeight + 'px';                                                              
+    } 
+
     attach() {
         super.attach();
 
@@ -385,8 +398,18 @@ class MathBlock extends BlockEmbed {
         const textarea = node.querySelector('.math-editor') as HTMLTextAreaElement;
         const preview = node.querySelector('.math-preview') as HTMLElement;
         if (!textarea || !preview) return;
-        textarea.style.height = 'auto';                                                                                        
-        textarea.style.height = textarea.scrollHeight + 'px';
+
+        node.addEventListener('click', () => {                                                                                 
+            this.expand();                                                                         
+            requestAnimationFrame(() => {                                                                                      
+                textarea.focus();                                                                                              
+                textarea.setSelectionRange(textarea.value.length, textarea.value.length);                                      
+            });                                                                                                                
+        });                                                                                                                    
+                                                                                                                            
+        textarea.addEventListener('blur', () => {                                                                              
+            node.classList.add('math-collapsed');                                                                              
+        }); 
 
         textarea.addEventListener('mousedown', (e) => e.stopPropagation());
         textarea.addEventListener('click', (e) => e.stopPropagation());
@@ -406,8 +429,10 @@ class MathBlock extends BlockEmbed {
                     const quillInstance = Quill.find(node.closest('.ql-editor')!.parentElement!);                                      
                     if (quillInstance) {                                                                                               
                         const blot = Quill.find(node);                                                                                 
-                        const index = (quillInstance as any).getIndex(blot);                                                           
-                        (quillInstance as any).setSelection(index, 0, 'user');                                                     
+                        const index = (quillInstance as any).getIndex(blot);
+                        //todo: fix position on ArrowRight
+                        const pos = e.key === 'ArrowDown' ? index : index + 1;                                                    
+                        (quillInstance as any).setSelection(pos, 0, 'user');                                                     
                     }                                                                                                                  
                 }                                                                                                                      
             }
@@ -435,6 +460,7 @@ class MathBlock extends BlockEmbed {
         }); 
 
         if (!textarea.value) {
+            this.expand();
             requestAnimationFrame(() => {
                 textarea.focus();
                 textarea.setSelectionRange(textarea.value.length, textarea.value.length);
