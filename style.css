@@ -433,7 +433,7 @@ x-scrawl {
     outline: none;                                                                                                         
     background: transparent;                                                                                               
     vertical-align: middle;                                                                                                
-    padding: 0 2px;                                                                                                        
+    padding: 0 5px;     
 }                                                                                                                        
 
 .math-inline-preview {                                                                                                     

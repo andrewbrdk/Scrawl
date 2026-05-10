@@ -332,38 +332,30 @@ const codeBlockRule: Rule = {
     }
 };
 
-const mathInlineRule: Rule = {
-    name: 'math-inline',
-
-    shouldRun: (ctx) => {
-        if (ctx.symbol !== '$') return false;
-        const text = ctx.lineText;
-        if (text.length < 3) return false;
-        if (text[text.length - 1] !== '$') return false;
-        let i = text.length - 2;
-        while (i >= 0) {
-            if (text[i] === '$') break;
-            i--;
-        }
-        if (i < 0) return false;
-        const contentLength = text.length - i - 2;
-        return contentLength > 0;
-    },
-
-    run: (quill, ctx) => {
-        const text = ctx.lineText;
-        let i = text.length - 2;
-        while (i >= 0) {
-            if (text[i] === '$') break;
-            i--;
-        }
-        const contentLength = text.length - i - 2;
-        const latex = text.slice(i + 1, text.length - 1);
-        const absStart = ctx.lineStart + i;
-        quill.deleteText(absStart, contentLength + 2);
-        quill.insertEmbed(absStart, 'math-inline', { latex }, 'user');
-        quill.setSelection(absStart + 1, 0, 'user');
-    }
+const mathInlineRule: Rule = {                                                                                             
+    name: 'math-inline',                                                                                                   
+                                                                                                                           
+    shouldRun: (ctx) => {                                                                                                  
+        if (ctx.symbol !== '$') return false;                                                                              
+        const text = ctx.lineText;                                                                                         
+        return text.length >= 2 && text[text.length - 1] === '$' && text[text.length - 2] === '$';                         
+    },                                                                                                                     
+                                                                                                                           
+    run: (quill, ctx) => {                                                                                                 
+        const absStart = ctx.lineStart + ctx.lineText.length - 2;                                                          
+        quill.deleteText(absStart, 2);                                                                                     
+        quill.insertEmbed(absStart, 'math-inline', { latex: '' }, 'user');                                                 
+        quill.setSelection(absStart + 1, 0, 'user');                                                                       
+        const node = quill.getLeaf(absStart + 1)[0]?.domNode?.closest('.ql-math-inline') as HTMLElement;                   
+        if (node) {                                                                                                        
+            const input = node.querySelector('.math-inline-editor') as HTMLInputElement;                                   
+            if (input) {                                                                                                   
+                input.hidden = false;                                                                                      
+                input.style.width = '1ch';                                                                                 
+                input.focus();                                                                                             
+            }                                                                                                              
+        }                                                                                                                  
+    }                                                                                                                      
 };
 
 const mathBlockRule: Rule = {
