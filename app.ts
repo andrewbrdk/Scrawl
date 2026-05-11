@@ -1,11 +1,13 @@
 import Quill from 'quill';
 import 'quill/dist/quill.bubble.css';
+import MagicUrl from 'quill-magic-url';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import { setupQuill, markdownBehaviour } from './quillcustom';
 
 window.katex = katex;
 setupQuill();
+Quill.register('modules/magicUrl', MagicUrl);
 
 interface Page {
     id: number;
@@ -166,6 +168,7 @@ class XScrawl extends HTMLElement {
                         ['formula'],
                         ['clean']
                     ],
+                    magicUrl: true,
                 },
                 theme: "bubble"
             });

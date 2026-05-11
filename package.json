@@ -2,7 +2,8 @@
   "dependencies": {
     "@types/katex": "^0.16.8",
     "katex": "^0.16.45",
-    "quill": "^2.0.3"
+    "quill": "^2.0.3",
+    "quill-magic-url": "^4.2.0"
   },
   "devDependencies": {
     "@types/quill": "^2.0.14",

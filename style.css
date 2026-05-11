@@ -318,6 +318,9 @@ x-scrawl {
 			padding: 8px;
 			border-radius: 4px;
 		}
+		.ql-editor a {                                                                                                             
+			pointer-events: auto;                                                                                                  
+		} 
 		#editor .ql-tooltip-arrow {
 			/*todo: fix shifting arrow near borders*/
 			display: none;

@@ -137,6 +137,14 @@ export function markdownBehaviour(quill: any) {
         }
         return true;
     });
+
+    quill.root.addEventListener('click', (e: MouseEvent) => {                                                                  
+        const target = e.target as HTMLElement;                                                                                
+        if (target.tagName === 'A' && (e.ctrlKey || e.metaKey)) {                                                              
+            const href = (target as HTMLAnchorElement).href;                                                                   
+            if (href) window.open(href, '_blank');                                                                             
+        }                                                                                                                      
+    }); 
 }
 
 const escapeStarRule: Rule = {
