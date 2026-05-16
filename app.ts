@@ -117,6 +117,7 @@ class XScrawl extends HTMLElement {
     #pagetitle: HTMLInputElement | null = null;
     #editor: HTMLElement | null = null;
     #quill: Quill | null = null;
+    #quillTooltip: HTMLElement | null = null;
     #notebook: Notebook | null = null;
     #selected: number | null = null;
     #expanded: Record<number, boolean> = {};
@@ -178,6 +179,7 @@ class XScrawl extends HTMLElement {
                 if (saveTimer) clearTimeout(saveTimer);
                 saveTimer = setTimeout(() => this.savePage(), 500);
             });
+            this.#quillTooltip = this.#editor!.querySelector('.ql-tooltip') as HTMLElement;
             //todo: slows down
             this.shiftQuillTooltip();
         }
@@ -427,20 +429,20 @@ class XScrawl extends HTMLElement {
     }
 
     shiftQuillTooltip(): void {
-        const tooltip = this.#editor!.querySelector('.ql-tooltip') as HTMLElement;
-        if (!tooltip) return;
+        if (!this.#quillTooltip) return;
         const observer = new MutationObserver(() => {
-            const tooltipRect = tooltip.getBoundingClientRect();
+            if (this.#quillTooltip!.classList.contains('ql-hidden')) return; 
+            const tooltipRect = this.#quillTooltip!.getBoundingClientRect();
             const editorRect = this.#editor!.getBoundingClientRect();
-            let left = parseFloat(tooltip.style.left || "0");
+            let left = parseFloat(this.#quillTooltip!.style.left || "0");
             if (tooltipRect.left < editorRect.left) {
                 left += editorRect.left - tooltipRect.left;
             } else if (tooltipRect.right > editorRect.right) {
                 left -= tooltipRect.right - editorRect.right;
             }
-            tooltip.style.left = left + "px";
+            this.#quillTooltip!.style.left = left + "px";
         });
-        observer.observe(tooltip, { attributes: true, attributeFilter: ['style'] });
+        observer.observe(this.#quillTooltip!, { attributes: true, attributeFilter: ['class'] });
     }
 
     updateTitle(): void {
