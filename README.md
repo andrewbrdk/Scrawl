@@ -1,10 +1,10 @@
 # Scrawl
 Personal Notes App
 
-The service starts at http://localhost:8080/ after the following commands:
+The web version starts at http://localhost:8080/ after the following commands:
 ```bash
 git clone https://github.com/andrewbrdk/Scrawl
-cd ./Scrawl
+cd ./Scrawl/web
 npm ci
 npm run build
 go get scrawl
