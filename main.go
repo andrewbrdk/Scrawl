@@ -15,6 +15,9 @@ var infoLog *log.Logger
 var errorLog *log.Logger
 
 var CONF Config
+
+// defaultDBFile is used unless SCRAWL_DBFILE is set; db_android.go overrides it.
+var defaultDBFile = "./scrawls.db"
 var SCRAWL Scrawl
 
 // todo: limit usage of global vars
@@ -52,7 +55,7 @@ func initApp() {
 
 func initConfig() {
 	CONF.port = ":8080"
-	CONF.dbFile = "./scrawls.db"
+	CONF.dbFile = defaultDBFile
 	CONF.password = ""
 	if port := os.Getenv("SCRAWL_PORT"); port != "" {
 		CONF.port = ":" + port

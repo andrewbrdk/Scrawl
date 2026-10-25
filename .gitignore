@@ -9,3 +9,7 @@ dist-web
 dist-wails
 scrawl-desktop
 bindings
+.task
+bin
+wails
+build
