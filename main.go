@@ -3,7 +3,6 @@ package main
 import (
 	"crypto/rand"
 	"database/sql"
-	"embed"
 	"encoding/json"
 	"errors"
 	"log"
@@ -16,9 +15,6 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 	_ "github.com/mattn/go-sqlite3"
 )
-
-//go:embed dist
-var embedded embed.FS
 
 var jwtSecretKey []byte
 
@@ -52,14 +48,13 @@ type Page struct {
 	Children []*Page `json:"children"`
 }
 
-func main() {
+// initApp is shared by the web and wails entry points (main_web.go, main_wails.go).
+func initApp() {
 	initConfig()
-	jwtSecretKey = generateRandomKey(32)
 	infoLog = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
 	errorLog = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 	SCRAWL.initDB()
 	SCRAWL.loadNotebook()
-	httpServer()
 }
 
 func initConfig() {
@@ -435,30 +430,6 @@ func (S *Scrawl) MovePage(draggedId int, targetId int, placement string) error {
 type Response struct {
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
-}
-
-func httpServer() {
-	http.HandleFunc("/", httpIndex)
-	http.Handle("/dist/", http.FileServer(http.FS(embedded)))
-	http.HandleFunc("/login", httpLogin)
-	http.HandleFunc("/pages", httpPages)
-	http.HandleFunc("/page", httpPage)
-	http.HandleFunc("/save", httpSavePage)
-	http.HandleFunc("/create", httpCreatePage)
-	http.HandleFunc("/delete", httpDeletePage)
-	http.HandleFunc("/rename", httpRenamePage)
-	http.HandleFunc("/move", httpMovePage)
-	log.Fatal(http.ListenAndServe(CONF.port, nil))
-}
-
-func httpIndex(w http.ResponseWriter, r *http.Request) {
-	data, err := embedded.ReadFile("dist/index.html")
-	if err != nil {
-		http.Error(w, "Error loading the page", http.StatusInternalServerError)
-		return
-	}
-	w.Header().Set("Content-Type", "text/html")
-	w.Write(data)
 }
 
 func httpLogin(w http.ResponseWriter, r *http.Request) {

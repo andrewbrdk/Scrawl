@@ -4,31 +4,16 @@ import MagicUrl from 'quill-magic-url';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import { setupQuill, markdownBehaviour } from './quillcustom';
+import { api, ApiError, Notebook, Page } from './api';
 
 window.katex = katex;
 setupQuill();
 Quill.register('modules/magicUrl', MagicUrl);
 
-interface Page {
-    id: number;
-    title: string;
-    position: number;
-    children: Page[];
-}
-
-interface Notebook {
-    pages: Page[];
-}
-
 interface DragState {
     draggedItem: HTMLElement | null;
     dragOverItem: HTMLElement | null;
     dragPlacement: string | null;
-}
-
-interface CreatePageResponse {
-    id: number;
-    notebook: Notebook;
 }
 
 class XMain extends HTMLElement {
@@ -52,18 +37,18 @@ class XMain extends HTMLElement {
     }
 
     async renderPage(): Promise<void> {
-        const res = await fetch('/pages');
-        const statusCode = res.status;
-        if (statusCode === 200) {
+        try {
+            const p = await api.getNotebook();
             this.#scrawl!.hidden = false;
             this.#login!.hidden = true;
-            const p: Notebook = await res.json();
             this.#scrawl!.init(p);
-        } else if (statusCode === 401) {
-            this.#login!.hidden = false;
-            this.#scrawl!.hidden = true;
-        } else {
-            this.#scrawl!.hidden = true;
+        } catch (e) {
+            if (e instanceof ApiError && e.status === 401) {
+                this.#login!.hidden = false;
+                this.#scrawl!.hidden = true;
+            } else {
+                this.#scrawl!.hidden = true;
+            }
         }
     }
 }
@@ -93,16 +78,11 @@ class XLogin extends HTMLElement {
 
     async submitLogin(): Promise<void> {
         const password = (this.querySelector('#password') as HTMLInputElement).value;
-        const response = await fetch('/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ password }),
-        });
-        if (response.ok) {
+        try {
+            await api.login!(password);
             (this.querySelector('#invalidpassword') as HTMLElement).style.display = "none";
             this.dispatchEvent(new CustomEvent('loginsuccess', { bubbles: true }));
-        } else {
+        } catch {
             (this.querySelector('#invalidpassword') as HTMLElement).style.display = "inline";
             setTimeout(() => {
                 (this.querySelector('#invalidpassword') as HTMLElement).style.display = "none";
@@ -464,39 +444,30 @@ class XScrawl extends HTMLElement {
 
     async updateEditor(): Promise<void> {
         if (!this.#selected) return;
-        const res = await fetch('/page?id=' + encodeURIComponent(this.#selected));
-        if (res.ok) {
-            const data = await res.json();
-            this.#quill!.setContents(data.delta);
-        } else {
+        try {
+            this.#quill!.setContents(await api.readPage(this.#selected) as any);
+        } catch {
             this.#quill!.setText('');
         }
     }
 
     async savePage(): Promise<void> {
         if (!this.#selected) return;
-        const delta = this.#quill!.getContents();
-        const res = await fetch('/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: this.#selected, delta: delta })
-        });
-        if (!res.ok) {
+        try {
+            await api.savePage(this.#selected, this.#quill!.getContents());
+        } catch {
             console.error("Failed to auto-save page:", this.#selected);
         }
     }
 
     async createPage(title: string, parentId: number | null): Promise<void> {
-        const res = await fetch('/create', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ title: title, parent: parentId || 0 })
-        });
-        if (!res.ok) {
+        let data;
+        try {
+            data = await api.createPage(title, parentId || 0);
+        } catch {
             console.error("Failed to create page");
             return;
         }
-        const data: CreatePageResponse = await res.json();
         if (parentId) this.#expanded[parentId] = true;
         this.#notebook = data.notebook;
         this.#selected = data.id;
@@ -505,17 +476,12 @@ class XScrawl extends HTMLElement {
 
     async deletePage(id: number): Promise<void> {
         if (!confirm(`Delete page "${this.getPageTitleById(id)}"?`)) return;
-        const res = await fetch('/delete', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id }),
-        });
-        if (!res.ok) {
+        try {
+            this.#notebook = await api.deletePage(id);
+        } catch {
             console.error("Failed to delete page");
             return;
         }
-        const data: Notebook = await res.json();
-        this.#notebook = data;
         this.#selected = null;
         await this.render();
     }
@@ -525,37 +491,23 @@ class XScrawl extends HTMLElement {
         const oldTitle = this.getPageTitleById(this.#selected);
         if (!newTitle || newTitle === oldTitle) return;
 
-        const res = await fetch('/rename', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ id: this.#selected, title: newTitle })
-        });
-        if (!res.ok) {
+        try {
+            this.#notebook = await api.renamePage(this.#selected!, newTitle);
+        } catch {
             console.error("Rename failed");
             this.#pagetitle!.value = oldTitle ?? "";
             return;
         }
-        const data: Notebook = await res.json();
-        this.#notebook = data;
         this.render();
     }
 
     async movePage(draggedId: number, targetId: number, placement: string): Promise<void> {
-        const res = await fetch('/move', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                draggedId: draggedId,
-                targetId: targetId,
-                placement: placement
-            })
-        });
-        if (!res.ok) {
+        try {
+            this.#notebook = await api.movePage(draggedId, targetId, placement);
+        } catch {
             console.error("Failed to move page");
             return;
         }
-        const data: Notebook = await res.json();
-        this.#notebook = data;
         this.render();
     }
 }

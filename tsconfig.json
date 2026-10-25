@@ -10,5 +10,5 @@
     "outDir": "./dist",
     "types": ["quill"]
   },
-  "include": ["app.ts", "declarations.d.ts"]
+  "include": ["app.ts", "api.ts", "declarations.d.ts"]
 }

@@ -5,4 +5,7 @@ go.sum
 *.db-journal
 .aider*
 node_modules
-dist
+dist-web
+dist-wails
+scrawl-desktop
+bindings
