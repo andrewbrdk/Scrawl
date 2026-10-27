@@ -21,9 +21,9 @@ var embedded embed.FS
 
 var jwtSecretKey []byte
 
-func main() {
+// run is the web entry point, called from main() after initApp().
+func run() {
 	jwtSecretKey = generateRandomKey(32)
-	initApp()
 
 	dist, err := fs.Sub(embedded, "dist-web")
 	if err != nil {

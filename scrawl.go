@@ -6,7 +6,9 @@ import (
 	"errors"
 	"log"
 	"os"
+	"runtime"
 	"sort"
+	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
 )
@@ -16,8 +18,6 @@ var errorLog *log.Logger
 
 var CONF Config
 
-// defaultDBFile is used unless SCRAWL_DBFILE is set; db_android.go overrides it.
-var defaultDBFile = "./scrawls.db"
 var SCRAWL Scrawl
 
 // todo: limit usage of global vars
@@ -44,7 +44,12 @@ type Page struct {
 	Children []*Page `json:"children"`
 }
 
-// initApp is shared by the web and wails entry points (main_web.go, main_wails.go).
+// main is shared; run() is defined by web.go (-tags web) or wails.go (default).
+func main() {
+	initApp()
+	run()
+}
+
 func initApp() {
 	initConfig()
 	infoLog = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)
@@ -53,9 +58,27 @@ func initApp() {
 	SCRAWL.loadNotebook()
 }
 
+// defaultDBPath is used unless SCRAWL_DBFILE is set.
+func defaultDBPath() string {
+	if runtime.GOOS == "android" {
+		// The working directory is read-only on Android; use the app's private
+		// files dir. The main process name is the package name.
+		pkg := "com.wails.app"
+		if b, err := os.ReadFile("/proc/self/cmdline"); err == nil {
+			if name, _, _ := strings.Cut(string(b), "\x00"); name != "" {
+				pkg = name
+			}
+		}
+		dir := "/data/data/" + pkg + "/files"
+		os.MkdirAll(dir, 0o700)
+		return dir + "/scrawls.db"
+	}
+	return "./scrawls.db"
+}
+
 func initConfig() {
 	CONF.port = ":8080"
-	CONF.dbFile = defaultDBFile
+	CONF.dbFile = defaultDBPath()
 	CONF.password = ""
 	if port := os.Getenv("SCRAWL_PORT"); port != "" {
 		CONF.port = ":" + port

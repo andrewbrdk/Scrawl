@@ -95,9 +95,8 @@ func (c *ScrawlService) MovePage(draggedId, targetId int, placement string) (*No
 	return c.s.notebook, nil
 }
 
-func main() {
-	initApp()
-
+// run is the wails (desktop and android) entry point, called from main() after initApp().
+func run() {
 	dist, err := fs.Sub(embedded, "dist-wails")
 	if err != nil {
 		log.Fatal(err)

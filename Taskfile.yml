@@ -27,3 +27,9 @@ tasks:
     summary: Runs the application
     cmds:
       - task: "{{.GOOS}}:run"
+
+  clean:
+    summary: Removes build outputs and generated files (keeps node_modules)
+    cmds:
+      - rm -rf bin dist-web dist-wails bindings .task
+      - task: android:clean
