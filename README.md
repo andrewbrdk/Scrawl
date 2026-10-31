@@ -6,7 +6,7 @@ The web version starts at http://localhost:8080/ after the following commands:
 git clone https://github.com/andrewbrdk/Scrawl
 cd ./Scrawl
 npm ci
-npm run build:web
+npm run dist:web
 go build -tags web -o bin/scrawl-web
 ./bin/scrawl-web
 ```
