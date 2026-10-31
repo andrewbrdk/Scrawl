@@ -15,8 +15,31 @@ import (
 //go:embed dist-wails
 var embedded embed.FS
 
-// ScrawlService is bound to the frontend; exported methods become TS functions
-// in bindings/ (npm run bindings).
+func run() {
+	dist, err := fs.Sub(embedded, "dist-wails")
+	if err != nil {
+		log.Fatal(err)
+	}
+	app := application.New(application.Options{
+		Name: "Scrawl",
+		Services: []application.Service{
+			application.NewService(&ScrawlService{s: &SCRAWL}),
+		},
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(dist),
+		},
+	})
+	app.Window.NewWithOptions(application.WebviewWindowOptions{
+		Title:  "Scrawl",
+		Width:  1100,
+		Height: 750,
+	})
+	if err := app.Run(); err != nil {
+		log.Fatal(err)
+	}
+}
+
+// ScrawlService exported methods become TS functions in /bindings
 type ScrawlService struct {
 	mu sync.Mutex // wails calls methods concurrently; loadNotebook mutates shared state
 	s  *Scrawl
@@ -33,7 +56,6 @@ func (c *ScrawlService) GetNotebook() *Notebook {
 	return c.s.notebook
 }
 
-// ReadPage returns the Quill delta as a JSON string.
 func (c *ScrawlService) ReadPage(id int) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -44,7 +66,6 @@ func (c *ScrawlService) ReadPage(id int) (string, error) {
 	return string(d), nil
 }
 
-// SavePage stores a Quill delta serialised as JSON.
 func (c *ScrawlService) SavePage(id int, delta string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -82,7 +103,6 @@ func (c *ScrawlService) RenamePage(id int, title string) (*Notebook, error) {
 	return c.s.notebook, nil
 }
 
-// MovePage placement is "above", "below" or "child".
 func (c *ScrawlService) MovePage(draggedId, targetId int, placement string) (*Notebook, error) {
 	if placement != "above" && placement != "below" && placement != "child" {
 		return nil, errors.New("invalid placement")
@@ -93,29 +113,4 @@ func (c *ScrawlService) MovePage(draggedId, targetId int, placement string) (*No
 		return nil, err
 	}
 	return c.s.notebook, nil
-}
-
-// run is the wails (android) entry point, called from main() after initApp().
-func run() {
-	dist, err := fs.Sub(embedded, "dist-wails")
-	if err != nil {
-		log.Fatal(err)
-	}
-	app := application.New(application.Options{
-		Name: "Scrawl",
-		Services: []application.Service{
-			application.NewService(&ScrawlService{s: &SCRAWL}),
-		},
-		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(dist),
-		},
-	})
-	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:  "Scrawl",
-		Width:  1100,
-		Height: 750,
-	})
-	if err := app.Run(); err != nil {
-		log.Fatal(err)
-	}
 }

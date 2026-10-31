@@ -21,7 +21,6 @@ var embedded embed.FS
 
 var jwtSecretKey []byte
 
-// run is the web entry point, called from main() after initApp().
 func run() {
 	jwtSecretKey = generateRandomKey(32)
 
