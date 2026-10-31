@@ -44,12 +44,6 @@ type Page struct {
 	Children []*Page `json:"children"`
 }
 
-// main is shared; run() is defined by web.go (-tags web) or wails.go (default).
-func main() {
-	initApp()
-	run()
-}
-
 func initApp() {
 	initConfig()
 	infoLog = log.New(os.Stdout, "INFO: ", log.Ldate|log.Ltime|log.Lshortfile)

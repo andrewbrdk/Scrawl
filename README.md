@@ -22,7 +22,7 @@ wails3 task android:run:device  # same, on a USB device
 wails3 task android:package     # release APK -> bin/scrawl.apk
 ```
 Android needs `ANDROID_HOME`, `ANDROID_NDK_HOME` and a JDK (`wails3 task android:install:deps` checks them).
-Web is the only target built with a Go tag (`-tags web`); everything else builds `wails.go`.
+Go build tags: `web` builds `web.go`, `android` builds `wails.go`.
   
 Env. variables
 ```bash
