@@ -25,8 +25,6 @@ tasks:
       - task: android:run
 
   clean:
-    summary: Removes everything ignored by git, except databases and dotfiles
-    prompt: This deletes all git-ignored files except *.db and dotfiles. Continue?
+    summary: Removes build outputs, generated files and dependencies
     cmds:
-      - git clean -fdX -e '!*.db' -e '!.*'
-      - rm -rf .task
+      - rm -rf bin dist-web dist-wails bindings node_modules .task build/android
