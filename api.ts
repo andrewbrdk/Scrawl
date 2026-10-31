@@ -1,5 +1,5 @@
 // Backend contract. The web build talks to the Go HTTP server with fetch, the
-// wails build calls the bound ScrawlService (bindings/). esbuild --define:__DESKTOP__
+// wails build calls the bound ScrawlService (bindings/). esbuild --define:__WAILS__
 // picks one at build time and drops the other from the bundle.
 
 export interface Page {
@@ -79,4 +79,4 @@ const makeWailsApi = (): Api => {
     };
 };
 
-export const api: Api = __DESKTOP__ ? makeWailsApi() : makeWebApi();
+export const api: Api = __WAILS__ ? makeWailsApi() : makeWebApi();

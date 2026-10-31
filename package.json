@@ -12,7 +12,7 @@
     "typescript": "^6.0.3"
   },
   "scripts": {
-    "dist:web":"tsc --noEmit && esbuild app.ts --bundle --define:__DESKTOP__=false --external:./bindings/* --loader:.ttf=file --loader:.woff=file --loader:.woff2=file --loader:.eot=file --loader:.svg=file --outfile=dist-web/app.js && cp index.html style.css dist-web/",
-    "dist:wails":"tsc --noEmit && esbuild app.ts --bundle --define:__DESKTOP__=true --loader:.ttf=file --loader:.woff=file --loader:.woff2=file --loader:.eot=file --loader:.svg=file --outfile=dist-wails/app.js && cp index.html style.css dist-wails/"
+    "dist:web":"tsc --noEmit && esbuild app.ts --bundle --define:__WAILS__=false --external:./bindings/* --loader:.ttf=file --loader:.woff=file --loader:.woff2=file --loader:.eot=file --loader:.svg=file --outfile=dist-web/app.js && cp index.html style.css dist-web/",
+    "dist:wails":"tsc --noEmit && esbuild app.ts --bundle --define:__WAILS__=true --loader:.ttf=file --loader:.woff=file --loader:.woff2=file --loader:.eot=file --loader:.svg=file --outfile=dist-wails/app.js && cp index.html style.css dist-wails/"
   }
 }
