@@ -7,6 +7,7 @@ git clone https://github.com/andrewbrdk/Scrawl
 cd ./Scrawl
 npm ci
 npm run build:web
+go build -tags web -o bin/scrawl-web
 ./bin/scrawl-web
 ```
 

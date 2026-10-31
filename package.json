@@ -12,10 +12,7 @@
     "typescript": "^6.0.3"
   },
   "scripts": {
-    "bindings": "wails3 generate bindings -ts -i -d bindings -f \"-tags=gtk3\"",
-    "build": "tsc --noEmit && esbuild app.ts --bundle --define:__DESKTOP__=false --external:./bindings/* --loader:.ttf=file --loader:.woff=file --loader:.woff2=file --loader:.eot=file --loader:.svg=file --outfile=dist-web/app.js && cp index.html style.css dist-web/",
-    "build:wails": "tsc --noEmit && esbuild app.ts --bundle --define:__DESKTOP__=true --loader:.ttf=file --loader:.woff=file --loader:.woff2=file --loader:.eot=file --loader:.svg=file --outfile=dist-wails/app.js && cp index.html style.css dist-wails/",
-    "build:web": "npm run build && go build -tags web -o bin/scrawl-web",
-    "clean": "wails3 task clean"
+    "build:web": "tsc --noEmit && esbuild app.ts --bundle --define:__DESKTOP__=false --external:./bindings/* --loader:.ttf=file --loader:.woff=file --loader:.woff2=file --loader:.eot=file --loader:.svg=file --outfile=dist-web/app.js && cp index.html style.css dist-web/",
+    "build:wails": "tsc --noEmit && esbuild app.ts --bundle --define:__DESKTOP__=true --loader:.ttf=file --loader:.woff=file --loader:.woff2=file --loader:.eot=file --loader:.svg=file --outfile=dist-wails/app.js && cp index.html style.css dist-wails/"
   }
 }
