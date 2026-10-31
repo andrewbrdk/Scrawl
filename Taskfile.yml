@@ -25,7 +25,8 @@ tasks:
       - task: android:run
 
   clean:
-    summary: Removes build outputs and generated files (keeps node_modules)
+    summary: Removes everything ignored by git, except databases and dotfiles
+    prompt: This deletes all git-ignored files except *.db and dotfiles. Continue?
     cmds:
-      - rm -rf bin dist-web dist-wails bindings .task
-      - task: android:clean
+      - git clean -fdX -e '!*.db' -e '!.*'
+      - rm -rf .task
