@@ -27,4 +27,4 @@ tasks:
   clean:
     summary: Removes build outputs, generated files and dependencies
     cmds:
-      - rm -rf bin dist-web dist-wails bindings node_modules .task build/android
+      - rm -rf bin dist-web dist-wails frontend/bindings frontend/node_modules .task build/android

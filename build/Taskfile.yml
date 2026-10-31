@@ -12,24 +12,24 @@ tasks:
     summary: Install frontend dependencies
     run: once
     sources:
-      - package.json
-      - package-lock.json
+      - frontend/package.json
+      - frontend/package-lock.json
     generates:
-      - node_modules
+      - frontend/node_modules
     preconditions:
       - sh: npm version
         msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
     cmds:
-      - npm install
+      - npm install --prefix frontend
 
   generate:bindings:
-    summary: Generates TS bindings (./bindings) for the bound ScrawlService
+    summary: Generates TS bindings (./frontend/bindings) for the bound ScrawlService
     run: once
     deps:
       - task: go:mod:tidy
     cmds:
-      - wails3 generate bindings -f '-tags android' -clean=true -ts -i -d bindings
-      - test -f bindings/scrawl/scrawlservice.ts
+      - wails3 generate bindings -f '-tags android' -clean=true -ts -i -d frontend/bindings
+      - test -f frontend/bindings/scrawl/scrawlservice.ts
     # Bindings come from the Go AST, so no C compiler is needed. The android
     # tag pulls in cgo files that include <jni.h>, which only the NDK provides.
     env:
@@ -42,10 +42,10 @@ tasks:
     # aren't regenerated (-clean) while the bundler reads them.
     run: once
     sources:
-      - "*.ts"
-      - index.html
-      - style.css
-      - package.json
+      - frontend/*.ts
+      - frontend/index.html
+      - frontend/style.css
+      - frontend/package.json
     generates:
       - dist-wails/**/*
     deps:
@@ -55,4 +55,4 @@ tasks:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
     cmds:
-      - npm run dist:wails -q
+      - npm run dist:wails -q --prefix frontend
