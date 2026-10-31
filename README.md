@@ -17,8 +17,6 @@ wails3 init -n scrawl -t vanilla -d /tmp/scaffold
 mkdir -p build/android
 cp -rn /tmp/scaffold/scrawl/build/android/. build/android/
 npm ci
-GOOS=android CGO_ENABLED=0 wails3 generate bindings -f '-tags android' -clean=true -ts -i -d bindings
-wails3 task build 
 wails3 task android:run         # build, install and launch on an emulator
 wails3 task android:run:device  # same, on a USB device
 wails3 task android:package     # release APK -> bin/scrawl.apk

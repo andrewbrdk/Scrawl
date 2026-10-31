@@ -27,19 +27,13 @@ tasks:
     run: once
     deps:
       - task: go:mod:tidy
-    sources:
-      - "*.go"
-      - go.mod
-      - go.sum
-    generates:
-      - bindings/**/*
     cmds:
-      - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts -i -d bindings
-    # Bindings come from the Go AST, so no C compiler is needed. For android the
+      - wails3 generate bindings -f '-tags android' -clean=true -ts -i -d bindings
+      - test -f bindings/scrawl/scrawlservice.ts
+    # Bindings come from the Go AST, so no C compiler is needed. The android
     # tag pulls in cgo files that include <jni.h>, which only the NDK provides.
     env:
-      GOOS: '{{if contains "android" .BUILD_FLAGS}}android{{else}}{{OS}}{{end}}'
-      CGO_ENABLED: '{{if contains "android" .BUILD_FLAGS}}0{{else}}1{{end}}'
+      CGO_ENABLED: 0
 
   build:frontend:
     label: build:frontend (DEV={{.DEV}})
@@ -60,7 +54,5 @@ tasks:
         vars:
           BUILD_FLAGS:
             ref: .BUILD_FLAGS
-          OBFUSCATED:
-            ref: .OBFUSCATED
     cmds:
       - npm run dist:wails -q
