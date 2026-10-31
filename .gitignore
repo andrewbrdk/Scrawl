@@ -1,5 +1,4 @@
-scrawl
-go.sum
+/scrawl
 .vscode
 *.db
 *.db-journal
@@ -7,9 +6,7 @@ go.sum
 node_modules
 dist-web
 dist-wails
-scrawl-desktop
 bindings
 .task
-bin
-wails
-build
+/bin
+/build/android

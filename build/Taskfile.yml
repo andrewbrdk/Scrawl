@@ -1,0 +1,66 @@
+version: '3'
+
+tasks:
+  go:mod:tidy:
+    summary: Runs `go mod tidy`
+    internal: true
+    run: once
+    cmds:
+      - go mod tidy
+
+  install:frontend:deps:
+    summary: Install frontend dependencies
+    run: once
+    sources:
+      - package.json
+      - package-lock.json
+    generates:
+      - node_modules
+    preconditions:
+      - sh: npm version
+        msg: "Looks like npm isn't installed. Npm is part of the Node installer: https://nodejs.org/en/download/"
+    cmds:
+      - npm install
+
+  generate:bindings:
+    summary: Generates TS bindings (./bindings) for the bound ScrawlService
+    run: once
+    deps:
+      - task: go:mod:tidy
+    sources:
+      - "*.go"
+      - go.mod
+      - go.sum
+    generates:
+      - bindings/**/*
+    cmds:
+      - wails3 generate bindings -f '{{.BUILD_FLAGS}}' -clean=true{{if eq .OBFUSCATED "true"}} -obfuscated{{end}} -ts -i -d bindings
+    # Bindings come from the Go AST, so no C compiler is needed. For android the
+    # tag pulls in cgo files that include <jni.h>, which only the NDK provides.
+    env:
+      GOOS: '{{if contains "android" .BUILD_FLAGS}}android{{else}}{{OS}}{{end}}'
+      CGO_ENABLED: '{{if contains "android" .BUILD_FLAGS}}0{{else}}1{{end}}'
+
+  build:frontend:
+    label: build:frontend (DEV={{.DEV}})
+    summary: Bundles the wails frontend into dist-wails (needs bindings/)
+    # android:build and linux:build both depend on this; run once so bindings
+    # aren't regenerated (-clean) while the bundler reads them.
+    run: once
+    sources:
+      - "*.ts"
+      - index.html
+      - style.css
+      - package.json
+    generates:
+      - dist-wails/**/*
+    deps:
+      - task: install:frontend:deps
+      - task: generate:bindings
+        vars:
+          BUILD_FLAGS:
+            ref: .BUILD_FLAGS
+          OBFUSCATED:
+            ref: .OBFUSCATED
+    cmds:
+      - npm run dist:wails -q
