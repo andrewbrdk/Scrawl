@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -46,6 +47,7 @@ func defaultDBPath() string {
 		return "./scrawls.db"
 	}
 	pkg := "com.scrawl.app"
+	//todo: hardcode package name and remove?
 	if b, err := os.ReadFile("/proc/self/cmdline"); err == nil {
 		if p, _, _ := strings.Cut(string(b), "\x00"); p != "" {
 			pkg = p
