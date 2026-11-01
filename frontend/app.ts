@@ -212,7 +212,7 @@ class XScrawl extends HTMLElement {
                             <span class="title">${escapeHTML(page.title)}</span>
                         </div>
                         <div class="right">
-                            <button class="drag-handle" draggable="true">⠿</button>
+                            <button class="drag-handle">⠿</button>
                             <button class="addchild">＋</button>
                             <button class="delete">✕</button>
                         </div>
@@ -329,53 +329,54 @@ class XScrawl extends HTMLElement {
         pages.forEach(li => {
             const handle = li.querySelector('.drag-handle') as HTMLElement;
 
-            handle.ondragstart = (e: DragEvent) => {
+            // pointer events instead of HTML5 drag and drop, which touch screens don't fire
+            handle.onpointerdown = (e: PointerEvent) => {
+                e.preventDefault();
+                handle.setPointerCapture(e.pointerId);
                 this.#dragState.draggedItem = li;
                 li.classList.add('dragging');
-                const liRect = li.getBoundingClientRect();
-                const offsetX = e.clientX - liRect.left;
-                const offsetY = e.clientY - liRect.top;
-                e.dataTransfer!.setDragImage(li, offsetX, offsetY);
-                e.dataTransfer!.effectAllowed = "move";
             };
 
-            handle.ondragend = () => {
+            handle.onpointermove = (e: PointerEvent) => {
+                if (this.#dragState.draggedItem !== li) return;
+                // the pointer is captured, so find the row under it manually
+                const over = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLLIElement>('#pages li');
+                if (!over || over === li) {
+                    this.#dragState.dragOverItem = null;
+                    this.#dragState.dragPlacement = null;
+                } else {
+                    const rect = over.getBoundingClientRect();
+                    const y = e.clientY - rect.top;
+                    const h = rect.height;
+                    const edge = Math.min(20, h * 0.25);
+                    this.#dragState.dragOverItem = over;
+                    if (y < edge) {
+                        this.#dragState.dragPlacement = 'above';
+                    } else if (y > h - edge) {
+                        this.#dragState.dragPlacement = 'below';
+                    } else {
+                        this.#dragState.dragPlacement = 'child';
+                    }
+                }
+                this.updateDragFeedback();
+            };
+
+            const endDrag = (drop: boolean) => {
+                if (this.#dragState.draggedItem !== li) return;
                 this.querySelectorAll<HTMLLIElement>('#pages li').forEach(item => {
                     item.classList.remove('dragging', 'drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
                 });
-                this.handleDrop();
+                if (drop) this.handleDrop();
                 this.#dragState = {
                     draggedItem: null,
                     dragOverItem: null,
                     dragPlacement: null
                 };
             };
-
-            li.ondragover = (e: DragEvent) => {
-                e.preventDefault();
-                if (li === this.#dragState.draggedItem) return;
-                const rect = li.getBoundingClientRect();
-                const y = e.clientY - rect.top;
-                const h = rect.height;
-                const edge = Math.min(20, h * 0.25);
-                this.#dragState.dragOverItem = li;
-                if (y < edge) {
-                    this.#dragState.dragPlacement = 'above';
-                } else if (y > h - edge) {
-                    this.#dragState.dragPlacement = 'below';
-                } else {
-                    this.#dragState.dragPlacement = 'child';
-                }
-                this.updateDragFeedback();
-            };
-
-            li.ondragleave = () => {
-                if (li === this.#dragState.dragOverItem) {
-                    li.classList.remove('drag-over', 'drag-over-above', 'drag-over-below', 'drag-over-child');
-                    this.#dragState.dragOverItem = null;
-                    this.#dragState.dragPlacement = null;
-                }
-            };
+            handle.onpointerup = () => endDrag(true);
+            handle.onpointercancel = () => endDrag(false);
+            // the click after a drag would otherwise select the row
+            handle.onclick = (e: MouseEvent) => e.stopPropagation();
         });
     }
 

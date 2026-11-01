@@ -173,6 +173,11 @@ x-scrawl {
 			opacity: 1;
 			pointer-events: auto;
 		}
+		button.drag-handle {
+			touch-action: none;
+			user-select: none;
+			-webkit-user-select: none;
+		}
 		button.collapse {
 			border: none;
 			background: transparent;
