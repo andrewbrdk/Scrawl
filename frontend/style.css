@@ -451,6 +451,43 @@ x-scrawl {
     padding: 0 5px;     
 }                                                                                                                        
 
-.math-inline-preview {                                                                                                     
-    padding-left: 4px;                                                                                                     
+.math-inline-preview {
+    padding-left: 4px;
+}
+
+@media (orientation: portrait) and (max-width: 768px) {
+	x-scrawl {
+		flex-direction: column;
+
+		aside {
+			width: 100% !important;
+			height: 50vh;
+			height: 50dvh;
+			flex: 0 0 auto;
+			box-sizing: border-box;
+			overflow-y: auto;
+			border-bottom: 1px solid black;
+
+			#newpage {
+				opacity: 1;
+				pointer-events: auto;
+				margin-bottom: 1rem;
+			}
+			.page-row.selected button {
+				opacity: 1;
+				pointer-events: auto;
+			}
+			.page-row .right {
+				margin-right: 1rem;
+			}
+		}
+		#sidebar-control {
+			display: none;
+		}
+		#content {
+			flex: 1 1 0;
+			min-height: 0;
+			padding: 0 1rem;
+		}
+	}
 }
