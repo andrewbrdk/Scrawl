@@ -16,6 +16,7 @@ import (
 var embedded embed.FS
 
 func run() {
+	infoLog.Printf("Scrawl android app starting, db=%s", CONF.dbFile)
 	dist, err := fs.Sub(embedded, "dist-wails")
 	if err != nil {
 		log.Fatal(err)

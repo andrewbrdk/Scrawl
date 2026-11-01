@@ -22,8 +22,8 @@ var embedded embed.FS
 var jwtSecretKey []byte
 
 func run() {
+	infoLog.Printf("Scrawl web server starting, port=%s, db=%s", CONF.port, CONF.dbFile)
 	jwtSecretKey = generateRandomKey(32)
-
 	dist, err := fs.Sub(embedded, "dist-web")
 	if err != nil {
 		log.Fatal(err)
