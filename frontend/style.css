@@ -294,7 +294,8 @@ x-scrawl {
 
 		.content-header {
 			flex: 0 0 auto;
-			display: flex;
+			display: grid;
+			grid-template-columns: 2.5rem 1fr 2.5rem;
 			align-items: center;
 			min-height: 3rem;
 			height: 3rem;
@@ -302,7 +303,13 @@ x-scrawl {
 			/*border-bottom: 1px solid #ddd;*/
 			box-sizing: border-box;
 
+			#toggletree {
+				margin-left: 0;
+				padding-left: 0;
+			}
+
 			#pagetitle {
+				grid-column: 2;
 				font-size: 1.6rem;
 				font-weight: bold;
 				border: none;
@@ -470,6 +477,7 @@ x-scrawl {
 			height: 50dvh;
 			flex: 0 0 auto;
 			box-sizing: border-box;
+			padding-right: 0.7rem;
 			overflow-y: auto;
 			border-bottom: 1px solid black;
 
@@ -482,8 +490,9 @@ x-scrawl {
 				opacity: 1;
 				pointer-events: auto;
 			}
+			/* approx match the burger */
 			.page-row .right {
-				margin-right: 1rem;
+				margin-right: 0.6rem;
 			}
 		}
 		#sidebar-control {

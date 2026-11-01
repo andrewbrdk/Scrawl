@@ -123,7 +123,7 @@ class XScrawl extends HTMLElement {
             <aside>
                 <div id="sidebar-header">
                     <span id="sidebar-label">Pages</span>
-                    <button id="toggletree" title="Toggle page tree">«</button>
+                    <button id="toggletree" title="Toggle page tree">☰</button>
                 </div>
                 <ul id="pages"></ul>
                 <button id="newpage">＋</button>
@@ -234,7 +234,6 @@ class XScrawl extends HTMLElement {
         this.#aside!.classList.add("hidden");
         this.#aside!.style.width = "0px";
         this.#sidebarControl!.classList.add("hidden");
-        this.#toggle!.textContent = "»";
         this.#contentHeader!.prepend(this.#toggle!);
     }
 
@@ -242,7 +241,6 @@ class XScrawl extends HTMLElement {
         this.#aside!.classList.remove("hidden");
         this.#aside!.style.width = this.#sidebarDefaultWidth;
         this.#sidebarControl!.classList.remove("hidden");
-        this.#toggle!.textContent = "«";
         this.#sidebarHeader!.append(this.#toggle!);
     }
 
