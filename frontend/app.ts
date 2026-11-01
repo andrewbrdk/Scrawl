@@ -94,8 +94,6 @@ class XLogin extends HTMLElement {
 class XScrawl extends HTMLElement {
     #aside: HTMLElement | null = null;
     #sidebarControl: HTMLElement | null = null;
-    #sidebarHeader: HTMLElement | null = null;
-    #contentHeader: HTMLElement | null = null;
     #toggle: HTMLButtonElement | null = null;
     #ulpages: HTMLElement | null = null;
     #pagetitle: HTMLInputElement | null = null;
@@ -123,7 +121,6 @@ class XScrawl extends HTMLElement {
             <aside>
                 <div id="sidebar-header">
                     <span id="sidebar-label">Pages</span>
-                    <button id="toggletree" title="Toggle page tree">☰</button>
                 </div>
                 <ul id="pages"></ul>
                 <button id="newpage">＋</button>
@@ -133,14 +130,13 @@ class XScrawl extends HTMLElement {
             </div>
             <div id="content">
                 <div class="content-header">
+                    <button id="toggletree" title="Toggle page tree">☰</button>
                     <input id="pagetitle" type="text">
                 </div>
                 <div id="editor"></div>
             </div>`;
         this.#aside = this.querySelector('aside') as HTMLElement;
         this.#sidebarControl = this.querySelector('#sidebar-control') as HTMLElement;
-        this.#sidebarHeader = this.querySelector('#sidebar-header') as HTMLElement;
-        this.#contentHeader = this.querySelector('.content-header') as HTMLElement;
         this.#toggle = this.querySelector('#toggletree') as HTMLButtonElement;
         this.#ulpages = this.querySelector('#pages') as HTMLElement;
         this.#pagetitle = this.querySelector('#pagetitle') as HTMLInputElement;
@@ -234,14 +230,12 @@ class XScrawl extends HTMLElement {
         this.#aside!.classList.add("hidden");
         this.#aside!.style.width = "0px";
         this.#sidebarControl!.classList.add("hidden");
-        this.#contentHeader!.prepend(this.#toggle!);
     }
 
     expandSidebar(): void {
         this.#aside!.classList.remove("hidden");
         this.#aside!.style.width = this.#sidebarDefaultWidth;
         this.#sidebarControl!.classList.remove("hidden");
-        this.#sidebarHeader!.append(this.#toggle!);
     }
 
     bindEvents(): void {
