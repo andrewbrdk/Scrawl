@@ -248,6 +248,18 @@ x-scrawl {
 			scale: 1.1;
 		}
 	}
+	#toggletree {
+		flex: 0 0 auto;
+		margin: 0 0.5rem;
+		background: transparent;
+		border: none;
+		font-size: 1.4rem;
+		cursor: pointer;
+		opacity: 0.6;
+	}
+	#toggletree:hover {
+		opacity: 1;
+	}
 	#sidebar-control {
 		min-width: 1rem;
 		display: flex;
@@ -263,8 +275,8 @@ x-scrawl {
 			width: 100%;
 			cursor: col-resize;
 		}
-		.resizer.sidebar-collapsed {
-			cursor: pointer;
+		&.hidden {
+			display: none;
 		}
 	}
 	#content {

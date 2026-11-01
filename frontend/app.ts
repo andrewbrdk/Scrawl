@@ -93,6 +93,10 @@ class XLogin extends HTMLElement {
 
 class XScrawl extends HTMLElement {
     #aside: HTMLElement | null = null;
+    #sidebarControl: HTMLElement | null = null;
+    #sidebarHeader: HTMLElement | null = null;
+    #contentHeader: HTMLElement | null = null;
+    #toggle: HTMLButtonElement | null = null;
     #ulpages: HTMLElement | null = null;
     #pagetitle: HTMLInputElement | null = null;
     #editor: HTMLElement | null = null;
@@ -107,7 +111,6 @@ class XScrawl extends HTMLElement {
     #resizingStartWidth: number = 0;
     #sidebarDefaultWidth: string = "15%";
     #sidebarMinWidth: number = 120;
-    #collapseEdgeThreshold: number = 30;
     #dragState: DragState = {
         draggedItem: null,
         dragOverItem: null,
@@ -120,6 +123,7 @@ class XScrawl extends HTMLElement {
             <aside>
                 <div id="sidebar-header">
                     <span id="sidebar-label">Pages</span>
+                    <button id="toggletree" title="Toggle page tree">«</button>
                 </div>
                 <ul id="pages"></ul>
                 <button id="newpage">＋</button>
@@ -134,6 +138,10 @@ class XScrawl extends HTMLElement {
                 <div id="editor"></div>
             </div>`;
         this.#aside = this.querySelector('aside') as HTMLElement;
+        this.#sidebarControl = this.querySelector('#sidebar-control') as HTMLElement;
+        this.#sidebarHeader = this.querySelector('#sidebar-header') as HTMLElement;
+        this.#contentHeader = this.querySelector('.content-header') as HTMLElement;
+        this.#toggle = this.querySelector('#toggletree') as HTMLButtonElement;
         this.#ulpages = this.querySelector('#pages') as HTMLElement;
         this.#pagetitle = this.querySelector('#pagetitle') as HTMLInputElement;
         this.#editor = this.querySelector('#editor') as HTMLElement;
@@ -225,23 +233,23 @@ class XScrawl extends HTMLElement {
     collapseSidebar(): void {
         this.#aside!.classList.add("hidden");
         this.#aside!.style.width = "0px";
-        this.#resizer!.classList.add("sidebar-collapsed");
+        this.#sidebarControl!.classList.add("hidden");
+        this.#toggle!.textContent = "»";
+        this.#contentHeader!.prepend(this.#toggle!);
     }
 
     expandSidebar(): void {
         this.#aside!.classList.remove("hidden");
         this.#aside!.style.width = this.#sidebarDefaultWidth;
-        this.#resizer!.classList.remove("sidebar-collapsed");
+        this.#sidebarControl!.classList.remove("hidden");
+        this.#toggle!.textContent = "«";
+        this.#sidebarHeader!.append(this.#toggle!);
     }
 
     bindEvents(): void {
         this.unbindEvents();
 
         this.#resizer!.onmousedown = (e: MouseEvent) => {
-            if (this.#aside!.classList.contains("hidden")) {
-                this.expandSidebar();
-                return;
-            }
             this.#isResizing = true;
             this.#resizingStartX = e.clientX;
             this.#resizingStartWidth = parseInt(window.getComputedStyle(this.#aside!).width, 10);
@@ -251,19 +259,8 @@ class XScrawl extends HTMLElement {
         this.onmousemove = (e: MouseEvent) => {
             if (!this.#isResizing) return;
             const delta = e.clientX - this.#resizingStartX;
-            const newWidth = this.#resizingStartWidth + delta;
-            const nearLeftEdge = e.clientX <= this.#collapseEdgeThreshold;
-            if (newWidth <= this.#sidebarMinWidth && nearLeftEdge) {
-                this.collapseSidebar();
-                this.#isResizing = false;
-                document.body.style.userSelect = "";
-                return;
-            }
-            if (newWidth > this.#sidebarMinWidth) {
-                this.#aside!.style.width = newWidth + "px";
-            } else {
-                this.#aside!.style.width = this.#sidebarMinWidth + "px";
-            }
+            const newWidth = Math.max(this.#resizingStartWidth + delta, this.#sidebarMinWidth);
+            this.#aside!.style.width = newWidth + "px";
         };
 
         this.onmouseup = () => {
@@ -273,6 +270,11 @@ class XScrawl extends HTMLElement {
                 this.#resizingStartWidth = 0;
                 document.body.style.userSelect = "";
             }
+        };
+
+        this.#toggle!.onclick = () => {
+            if (this.#aside!.classList.contains("hidden")) this.expandSidebar();
+            else this.collapseSidebar();
         };
 
         (this.querySelector("#newpage") as HTMLButtonElement).onclick = () => {
