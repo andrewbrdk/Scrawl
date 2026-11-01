@@ -2,29 +2,6 @@
 // wails build calls the bound ScrawlService (bindings/). esbuild --define:__WAILS__
 // picks one at build time and drops the other from the bundle.
 
-export interface Page {
-    id: number;
-    title: string;
-    position: number;
-    children: Page[];
-}
-
-export interface Notebook {
-    pages: Page[];
-}
-
-export interface CreatePageResponse {
-    id: number;
-    notebook: Notebook;
-}
-
-// Thrown by implementations on failure. status 401 means login is required.
-export class ApiError extends Error {
-    constructor(public status: number, message = `HTTP ${status}`) {
-        super(message);
-    }
-}
-
 export interface Api {
     getNotebook(): Promise<Notebook>;
     readPage(id: number): Promise<unknown>; // Quill delta
@@ -36,13 +13,29 @@ export interface Api {
     login?(password: string): Promise<void>; // web only
 }
 
+export interface Notebook {
+    pages: Page[];
+}
+
+export interface Page {
+    id: number;
+    title: string;
+    position: number;
+    children: Page[];
+}
+
+export interface CreatePageResponse {
+    id: number;
+    notebook: Notebook;
+}
+
 async function http<T>(path: string, body?: unknown): Promise<T> {
     const res = await fetch(path, body === undefined ? undefined : {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
     });
-    if (!res.ok) throw new ApiError(res.status);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`, { cause: res.status });
     const ct = res.headers.get('Content-Type') ?? '';
     return (ct.includes('application/json') ? res.json() : undefined) as Promise<T>;
 }

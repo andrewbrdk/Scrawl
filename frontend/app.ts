@@ -4,7 +4,7 @@ import MagicUrl from 'quill-magic-url';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import { setupQuill, markdownBehaviour } from './quillcustom';
-import { api, ApiError, Notebook, Page } from './api';
+import { api, Notebook, Page } from './api';
 
 window.katex = katex;
 setupQuill();
@@ -43,7 +43,7 @@ class XMain extends HTMLElement {
             this.#login!.hidden = true;
             this.#scrawl!.init(p);
         } catch (e) {
-            if (e instanceof ApiError && e.status === 401) {
+            if (e instanceof Error && e.cause === 401) {
                 this.#login!.hidden = false;
                 this.#scrawl!.hidden = true;
             } else {
