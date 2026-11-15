@@ -121,6 +121,7 @@ class XScrawl extends HTMLElement {
             <aside>
                 <div id="sidebar-header">
                     <span id="sidebar-label">Pages</span>
+                    <button id="sync" title="Sync" hidden>⇅</button>
                 </div>
                 <ul id="pages"></ul>
                 <button id="newpage">＋</button>
@@ -142,6 +143,11 @@ class XScrawl extends HTMLElement {
         this.#pagetitle = this.querySelector('#pagetitle') as HTMLInputElement;
         this.#editor = this.querySelector('#editor') as HTMLElement;
         this.#resizer = this.querySelector(".resizer") as HTMLElement;
+        const syncButton = this.querySelector('#sync') as HTMLButtonElement;
+        if (api.sync) {
+            syncButton.hidden = false;
+            syncButton.onclick = () => this.sync(syncButton);
+        }
 
         if (!this.#quill) {
             this.#quill = new Quill(this.#editor, {
@@ -504,6 +510,34 @@ class XScrawl extends HTMLElement {
             return;
         }
         this.render();
+    }
+
+    async sync(button: HTMLButtonElement): Promise<void> {
+        let server = localStorage.getItem('syncServer');
+        let token = localStorage.getItem('syncToken');
+        if (!server) {
+            server = prompt('Server address, e.g. https://notes.example.com');
+            if (!server) return;
+            token = prompt('Sync token (SCRAWL_SYNC_TOKEN on the server)') ?? '';
+            localStorage.setItem('syncServer', server);
+            localStorage.setItem('syncToken', token);
+        }
+        button.disabled = true;
+        try {
+            await this.savePage();
+            this.#notebook = await api.sync!(server, token ?? '');
+        } catch (e) {
+            // forget the address so the next click asks again
+            localStorage.removeItem('syncServer');
+            alert('Sync failed: ' + (e instanceof Error ? e.message : String(e)));
+            return;
+        } finally {
+            button.disabled = false;
+        }
+        if (this.#selected === null || this.getPageTitleById(this.#selected) === null) {
+            this.#selected = this.#notebook.pages.length > 0 ? this.#notebook.pages[0].id : null;
+        }
+        await this.render();
     }
 }
 

@@ -27,6 +27,7 @@ Go build tags: `web` builds `web.go`, `android` builds `wails.go`.
 Env. variables
 ```bash
 SCRAWL_PASSWORD              # Password for the web UI
+SCRAWL_SYNC_TOKEN            # Token the app syncs with. Sync is off without it
 SCRAWL_PORT                  # HTTP port (default: `8080`)
 SCRAWL_DBFILE                # Sqlite database file  
 ```

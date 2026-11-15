@@ -11,6 +11,7 @@ export interface Api {
     renamePage(id: number, title: string): Promise<Notebook>;
     movePage(draggedId: number, targetId: number, placement: string): Promise<Notebook>;
     login?(password: string): Promise<void>; // web only
+    sync?(server: string, token: string): Promise<Notebook>; // wails only
 }
 
 export interface Notebook {
@@ -68,6 +69,7 @@ const wailsApi: Api = {
     deletePage: async (id) => nb(await (await S()).DeletePage(id)),
     renamePage: async (id, title) => nb(await (await S()).RenamePage(id, title)),
     movePage: async (d, t, p) => nb(await (await S()).MovePage(d, t, p)),
+    sync: async (server, token) => nb(await (await S()).Sync(server, token)),
 };
 
 export const api: Api = __WAILS__ ? wailsApi : webApi;

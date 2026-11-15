@@ -14,9 +14,10 @@ var errorLog *log.Logger
 var CONF Config
 
 type Config struct {
-	port     string
-	dbFile   string
-	password string
+	port      string
+	dbFile    string
+	password  string
+	syncToken string
 }
 
 func main() {
@@ -25,8 +26,7 @@ func main() {
 	errorLog = log.New(os.Stdout, "ERROR: ", log.Ldate|log.Ltime|log.Lshortfile)
 	SCRAWL.initDB()
 	SCRAWL.loadNotebook()
-	// run() is defined by web.go (web) or wails.go (android).
-	run()
+	run() // defined in web.go (web) or wails.go (android).
 }
 
 func initConfig() {
@@ -40,6 +40,7 @@ func initConfig() {
 		CONF.dbFile = dbFile
 	}
 	CONF.password = os.Getenv("SCRAWL_PASSWORD")
+	CONF.syncToken = os.Getenv("SCRAWL_SYNC_TOKEN")
 }
 
 func defaultDBPath() string {

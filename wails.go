@@ -15,6 +15,8 @@ import (
 //go:embed dist-wails
 var embedded embed.FS
 
+const isServer = false
+
 func run() {
 	infoLog.Printf("Scrawl android app starting, db=%s", CONF.dbFile)
 	dist, err := fs.Sub(embedded, "dist-wails")
@@ -111,6 +113,16 @@ func (c *ScrawlService) MovePage(draggedId, targetId int, placement string) (*No
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if err := c.s.MovePage(draggedId, targetId, placement); err != nil {
+		return nil, err
+	}
+	return c.s.notebook, nil
+}
+
+// Sync holds the lock for the whole request, edits wait for it.
+func (c *ScrawlService) Sync(server, token string) (*Notebook, error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err := c.s.Sync(server, token); err != nil {
 		return nil, err
 	}
 	return c.s.notebook, nil

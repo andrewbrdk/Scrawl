@@ -4,6 +4,7 @@ package main
 
 import (
 	"crypto/rand"
+	"crypto/subtle"
 	"embed"
 	"encoding/json"
 	"io/fs"
@@ -21,6 +22,9 @@ var embedded embed.FS
 
 var jwtSecretKey []byte
 
+// the web build is the sync server
+const isServer = true
+
 func run() {
 	infoLog.Printf("Scrawl web server starting, port=%s, db=%s", CONF.port, CONF.dbFile)
 	jwtSecretKey = generateRandomKey(32)
@@ -37,6 +41,7 @@ func run() {
 	http.HandleFunc("/delete", httpDeletePage)
 	http.HandleFunc("/rename", httpRenamePage)
 	http.HandleFunc("/move", httpMovePage)
+	http.HandleFunc("/sync", httpSync)
 	log.Fatal(http.ListenAndServe(CONF.port, nil))
 }
 
@@ -295,4 +300,38 @@ func httpMovePage(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(SCRAWL.notebook)
+}
+
+// httpCheckSyncToken: the sync has its own token, SCRAWL_SYNC_TOKEN, sent as a bearer token.
+// Without the variable the sync is off.
+func httpCheckSyncToken(r *http.Request) bool {
+	if CONF.syncToken == "" {
+		return false
+	}
+	return subtle.ConstantTimeCompare(
+		[]byte(r.Header.Get("Authorization")), []byte("Bearer "+CONF.syncToken)) == 1
+}
+
+func httpSync(w http.ResponseWriter, r *http.Request) {
+	if !httpCheckSyncToken(r) {
+		http.Error(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req SyncMessage
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid JSON", http.StatusBadRequest)
+		return
+	}
+	resp, err := SCRAWL.ServerSync(req)
+	if err != nil {
+		errorLog.Printf("sync failed: %v", err)
+		http.Error(w, "Sync failed", http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(resp)
 }
