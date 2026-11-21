@@ -214,12 +214,17 @@ class XScrawl extends HTMLElement {
 
     async init(notebook: Notebook): Promise<void> {
         this.#notebook = notebook;
-        //todo: select last opened page
-        this.#selected = this.#notebook?.pages.length > 0 ? this.#notebook.pages[0].id : null;
+        const lastId = Number(localStorage.getItem('lastPage'));
+        const pages = this.#notebook?.pages ?? [];
+        if (this.getPageTitleById(lastId) !== null) this.#selected = lastId;
+        else this.#selected = pages.length > 0 ? pages[0].id : null;
+        const isMobilePortrait = window.matchMedia('(orientation: portrait) and (max-width: 768px)').matches;
+        if (isMobilePortrait) this.collapseSidebar();
         await this.render();
     }
 
     async render(): Promise<void> {
+        if (this.#selected) localStorage.setItem('lastPage', String(this.#selected));
         this.updatePages();
         this.bindEvents();
         //todo: handle empty notebook
@@ -592,12 +597,6 @@ class XScrawl extends HTMLElement {
         await this.render();
     }
 }
-
-
-
-
-
-
 
 
 function escapeHTML(str: string): string {
