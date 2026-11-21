@@ -138,6 +138,18 @@ class XScrawl extends HTMLElement {
                 </div>
                 <div id="editor"></div>
             </div>
+            <div id="format-menu">
+                <div id="format-strip" hidden>
+                    <button data-format="header" data-value="1">H1</button>
+                    <button data-format="header" data-value="2">H2</button>
+                    <button data-format="bold"><b>B</b></button>
+                    <button data-format="italic"><i>I</i></button>
+                    <button data-format="underline"><u>U</u></button>
+                    <button data-format="code-block">&lt;/&gt;</button>
+                    <button data-format="clean">✕</button>
+                </div>
+                <button id="format-toggle">/</button>
+            </div>
             <div id="settings" hidden>
                 <div class="settings-header">
                     <button id="settingsback" title="Back">←</button>
@@ -357,11 +369,29 @@ class XScrawl extends HTMLElement {
 
         this.bindDragEvents();
 
+        const strip = this.querySelector('#format-strip') as HTMLElement;
+        this.querySelectorAll<HTMLButtonElement>('#format-menu button').forEach(b => {
+            b.onpointerdown = (e) => e.preventDefault();
+        });
+        (this.querySelector('#format-toggle') as HTMLButtonElement).onclick = () => {
+            strip.hidden = !strip.hidden;
+        };
+        strip.querySelectorAll<HTMLButtonElement>('button').forEach(b => {
+            b.onclick = () => this.applyFormat(b.dataset.format!, b.dataset.value ? Number(b.dataset.value) : true);
+        });
+
         let renameTimer: ReturnType<typeof setTimeout> | null = null;
         this.#pagetitle!.oninput = () => {
             if (renameTimer) clearTimeout(renameTimer);
             renameTimer = setTimeout(() => { this.saveTitleChange(); }, 400);
         };
+    }
+
+    applyFormat(format: string, value: number | true): void {
+        const range = this.#quill!.getSelection();
+        if (!range) return;
+        if (format === 'clean') this.#quill!.removeFormat(range.index, range.length);
+        else this.#quill!.format(format, this.#quill!.getFormat(range)[format] === value ? false : value);
     }
 
     bindDragEvents(): void {
