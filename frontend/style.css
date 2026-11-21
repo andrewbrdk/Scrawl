@@ -179,6 +179,8 @@ x-scrawl {
 			-webkit-user-select: none;
 		}
 		button.collapse {
+			user-select: none;
+			-webkit-user-select: none;
 			border: none;
 			background: transparent;
 			cursor: pointer;
@@ -200,6 +202,8 @@ x-scrawl {
 			transform: scale(1.5) translateY(-2px) rotate(90deg);
 		}
 		button.addchild {
+			user-select: none;
+			-webkit-user-select: none;
 			border: none;
 			background: transparent;
 			cursor: pointer;
@@ -213,6 +217,8 @@ x-scrawl {
 			scale: 1.5;
 		}
 		button.delete {
+			user-select: none;
+			-webkit-user-select: none;
 			border: none;
 			background: transparent;
 			cursor: pointer;
@@ -227,6 +233,8 @@ x-scrawl {
 			scale: 1.5;
 		}
 		#newpage {
+			user-select: none;
+			-webkit-user-select: none;
 			background: transparent;
 			font-weight: bold;
 			cursor: pointer;
