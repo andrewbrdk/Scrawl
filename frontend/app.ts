@@ -100,6 +100,7 @@ class XScrawl extends HTMLElement {
     #editor: HTMLElement | null = null;
     #quill: Quill | null = null;
     #quillTooltip: HTMLElement | null = null;
+    #settings: HTMLElement | null = null;
     #notebook: Notebook | null = null;
     #selected: number | null = null;
     #expanded: Record<number, boolean> = {};
@@ -122,6 +123,7 @@ class XScrawl extends HTMLElement {
                 <div id="sidebar-header">
                     <span id="sidebar-label">Pages</span>
                     <button id="sync" title="Sync" hidden>⇅</button>
+                    <button id="settingsbutton" title="Settings" hidden>⚙</button>
                 </div>
                 <ul id="pages"></ul>
                 <button id="newpage">＋</button>
@@ -135,6 +137,24 @@ class XScrawl extends HTMLElement {
                     <input id="pagetitle" type="text">
                 </div>
                 <div id="editor"></div>
+            </div>
+            <div id="settings" hidden>
+                <div class="settings-header">
+                    <button id="settingsback" title="Back">←</button>
+                    <span>Settings</span>
+                </div>
+                <form id="settingsform">
+                    <h2>Sync</h2>
+                    <label for="syncserver">Server address</label>
+                    <input id="syncserver" type="url" placeholder="https://notes.example.com" autocapitalize="off" autocomplete="off">
+                    <label for="synctoken">Sync token</label>
+                    <input id="synctoken" type="password" autocomplete="off">
+                    <div class="settings-buttons">
+                        <button type="submit">Save</button>
+                        <button type="button" id="settingssync">Save and sync</button>
+                    </div>
+                    <div id="syncstatus"></div>
+                </form>
             </div>`;
         this.#aside = this.querySelector('aside') as HTMLElement;
         this.#sidebarControl = this.querySelector('#sidebar-control') as HTMLElement;
@@ -143,10 +163,27 @@ class XScrawl extends HTMLElement {
         this.#pagetitle = this.querySelector('#pagetitle') as HTMLInputElement;
         this.#editor = this.querySelector('#editor') as HTMLElement;
         this.#resizer = this.querySelector(".resizer") as HTMLElement;
-        const syncButton = this.querySelector('#sync') as HTMLButtonElement;
+        this.#settings = this.querySelector('#settings') as HTMLElement;
         if (api.sync) {
+            const syncButton = this.querySelector('#sync') as HTMLButtonElement;
+            const settingsButton = this.querySelector('#settingsbutton') as HTMLButtonElement;
             syncButton.hidden = false;
-            syncButton.onclick = () => this.sync(syncButton);
+            settingsButton.hidden = false;
+            // addEventListener: unbindEvents() resets the onclick of every button at each render
+            syncButton.addEventListener('click', () => this.sync());
+            settingsButton.addEventListener('click', () => this.openSettings());
+            (this.querySelector('#settingsback') as HTMLButtonElement).addEventListener('click', () => {
+                this.#settings!.hidden = true;
+            });
+            (this.querySelector('#settingsform') as HTMLFormElement).onsubmit = (e) => {
+                e.preventDefault();
+                this.saveSyncSettings();
+                this.setSyncStatus('Saved');
+            };
+            (this.querySelector('#settingssync') as HTMLButtonElement).addEventListener('click', () => {
+                this.saveSyncSettings();
+                this.sync();
+            });
         }
 
         if (!this.#quill) {
@@ -512,28 +549,43 @@ class XScrawl extends HTMLElement {
         this.render();
     }
 
-    async sync(button: HTMLButtonElement): Promise<void> {
-        let server = localStorage.getItem('syncServer');
-        let token = localStorage.getItem('syncToken');
+    openSettings(message: string = ''): void {
+        (this.querySelector('#syncserver') as HTMLInputElement).value = localStorage.getItem('syncServer') ?? '';
+        (this.querySelector('#synctoken') as HTMLInputElement).value = localStorage.getItem('syncToken') ?? '';
+        this.setSyncStatus(message);
+        this.#settings!.hidden = false;
+    }
+
+    saveSyncSettings(): void {
+        localStorage.setItem('syncServer', (this.querySelector('#syncserver') as HTMLInputElement).value.trim());
+        localStorage.setItem('syncToken', (this.querySelector('#synctoken') as HTMLInputElement).value);
+    }
+
+    setSyncStatus(text: string): void {
+        (this.querySelector('#syncstatus') as HTMLElement).textContent = text;
+    }
+
+    async sync(): Promise<void> {
+        const server = localStorage.getItem('syncServer');
         if (!server) {
-            server = prompt('Server address, e.g. https://notes.example.com');
-            if (!server) return;
-            token = prompt('Sync token (SCRAWL_SYNC_TOKEN on the server)') ?? '';
-            localStorage.setItem('syncServer', server);
-            localStorage.setItem('syncToken', token);
+            this.openSettings('Enter the server address');
+            return;
         }
-        button.disabled = true;
+        const token = localStorage.getItem('syncToken') ?? '';
+        const buttons = this.querySelectorAll<HTMLButtonElement>('#sync, #settingssync');
+        buttons.forEach(b => b.disabled = true);
+        this.setSyncStatus('Syncing...');
         try {
             await this.savePage();
-            this.#notebook = await api.sync!(server, token ?? '');
+            this.#notebook = await api.sync!(server, token);
         } catch (e) {
-            // forget the address so the next click asks again
-            localStorage.removeItem('syncServer');
-            alert('Sync failed: ' + (e instanceof Error ? e.message : String(e)));
+            // the saved values stay in the fields, correct them and try again
+            this.openSettings('Sync failed: ' + (e instanceof Error ? e.message : String(e)));
             return;
         } finally {
-            button.disabled = false;
+            buttons.forEach(b => b.disabled = false);
         }
+        this.#settings!.hidden = true;
         if (this.#selected === null || this.getPageTitleById(this.#selected) === null) {
             this.#selected = this.#notebook.pages.length > 0 ? this.#notebook.pages[0].id : null;
         }

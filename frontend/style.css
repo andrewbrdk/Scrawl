@@ -467,6 +467,47 @@ x-scrawl {
     padding-left: 4px;
 }
 
+[hidden] { display: none !important; }
+
+#settings {
+	position: fixed;
+	inset: 0;
+	z-index: 10;
+	background: white;
+	display: flex;
+	flex-direction: column;
+	padding: 0.5rem 1rem;
+	overflow-y: auto;
+}
+#settings .settings-header {
+	display: flex;
+	align-items: center;
+	gap: 0.5rem;
+	min-height: 3rem;
+	font-size: 1.4rem;
+	font-weight: bold;
+}
+#settings form {
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+}
+#settings input {
+	font-size: 1rem;
+	padding: 0.5rem;
+}
+#settings .settings-buttons {
+	display: flex;
+	gap: 0.5rem;
+}
+#settings button {
+	padding: 0.5rem 1rem;
+}
+#syncstatus {
+	min-height: 1.5em;
+	font-size: 0.9rem;
+}
+
 @media (orientation: portrait) and (max-width: 768px) {
 	x-scrawl {
 		flex-direction: column;
