@@ -587,25 +587,37 @@ x-scrawl {
 			display: flex;
 			flex-direction: column;
 			align-items: center;
-			gap: 0.5rem;
+			gap: 0;
+			padding: 0;
+			border: 1.5px solid black;
+			border-radius: 1.5rem;
+			background: white;
 			position: fixed;
 			right: 1rem;
 			bottom: 1rem;
-			z-index: 5;
+			z-index: 9;
 
 			#format-strip {
 				display: flex;
 				flex-direction: column;
-				gap: 0.5rem;
+				gap: 0;
+
+				&::after {
+					content: '';
+					width: 1.5rem;
+					height: 1px;
+					margin: 0.25rem auto;
+					background: #ccc;
+				}
 			}
 			button {
-				width: 2.5rem;
-				height: 2.5rem;
+				width: 2.75rem;
+				height: 2.75rem;
 				margin: 0;
 				padding: 0;
-				border-radius: 50%;
-				border: 1.5px solid black;
-				background: white;
+				border: none;
+				border-radius: 0;
+				background: transparent;
 				user-select: none;
 				-webkit-user-select: none;
 			}
