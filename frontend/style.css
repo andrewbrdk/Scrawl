@@ -506,12 +506,14 @@ x-scrawl {
 	min-height: 3rem;
 	font-size: 1.4rem;
 	font-weight: bold;
+	line-height: 1;
 
 	button {
 		padding: 0 0.5rem;
 		border: none;
 		background: transparent;
-		font-size: 1.4rem;
+		font: inherit;
+		transform: translateY(-0.1em);
 	}
 }
 #settings form {
@@ -565,6 +567,9 @@ x-scrawl {
 				opacity: 1;
 				pointer-events: auto;
 				margin-bottom: 1rem;
+			}
+			#settingsbutton {
+				margin-right: -0.2rem;
 			}
 			.page-row.selected button {
 				opacity: 1;
